@@ -8,50 +8,55 @@ CHAT_ID = os.getenv("CHAT_ID")
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 last_update_id = None
-selected_pair = {}
+
 
 def send_message(text, keyboard=None):
-    data = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
-    if keyboard:
-        data["reply_markup"] = keyboard
-    requests.post(f"{API}/sendMessage", json=data)
-def send_photo(photo_url, caption="", keyboard=None):
     data = {
         "chat_id": CHAT_ID,
-        "photo": photo_url,
-        "caption": caption,
+        "text": text,
         "parse_mode": "HTML"
     }
 
     if keyboard:
         data["reply_markup"] = keyboard
 
-    requests.post(f"{API}/sendPhoto", json=data)
+    requests.post(f"{API}/sendMessage", json=data)
+
+
 def main_menu():
-    return {"inline_keyboard": [
-        [{"text": "🌙 OTC", "callback_data": "menu_otc"}],
-        [{"text": "📈 Forex", "callback_data": "menu_forex"}],
-        [{"text": "📊 Estadísticas", "callback_data": "stats"}],
-        [{"text": "⏸ Detener señales", "callback_data": "stop"}]
-    ]}
+    return {
+        "inline_keyboard": [
+            [{"text": "🌙 OTC", "callback_data": "menu_otc"}],
+            [{"text": "📈 Forex", "callback_data": "menu_forex"}],
+            [{"text": "📊 Estadísticas", "callback_data": "stats"}],
+            [{"text": "⏸️ Detener señales", "callback_data": "stop"}]
+        ]
+    }
+
 
 def otc_menu():
-    return {"inline_keyboard": [
-        [{"text": "EUR/USD OTC", "callback_data": "pair_EUR_USD_OTC"}],
-        [{"text": "GBP/USD OTC", "callback_data": "pair_GBP_USD_OTC"}],
-        [{"text": "USD/JPY OTC", "callback_data": "pair_USD_JPY_OTC"}],
-        [{"text": "AUD/CAD OTC", "callback_data": "pair_AUD_CAD_OTC"}],
-        [{"text": "AUD/CHF OTC", "callback_data": "pair_AUD_CHF_OTC"}],
-        [{"text": "⬅️ Volver", "callback_data": "back"}]
-    ]}
+    return {
+        "inline_keyboard": [
+            [{"text": "EUR/USD OTC", "callback_data": "pair_EUR_USD_OTC"}],
+            [{"text": "GBP/USD OTC", "callback_data": "pair_GBP_USD_OTC"}],
+            [{"text": "USD/JPY OTC", "callback_data": "pair_USD_JPY_OTC"}],
+            [{"text": "AUD/CAD OTC", "callback_data": "pair_AUD_CAD_OTC"}],
+            [{"text": "AUD/CHF OTC", "callback_data": "pair_AUD_CHF_OTC"}],
+            [{"text": "⬅️ Volver", "callback_data": "back"}]
+        ]
+    }
+
 
 def expiry_menu(pair):
-    return {"inline_keyboard": [
-        [{"text": "⏱ 1 minuto", "callback_data": f"expiry_1_{pair}"}],
-        [{"text": "⏱ 3 minutos", "callback_data": f"expiry_3_{pair}"}],
-        [{"text": "⏱ 5 minutos", "callback_data": f"expiry_5_{pair}"}],
-        [{"text": "⬅️ Volver", "callback_data": "menu_otc"}]
-    ]}
+    return {
+        "inline_keyboard": [
+            [{"text": "⏱️ 1 minuto", "callback_data": f"expiry_1_{pair}"}],
+            [{"text": "⏱️ 3 minutos", "callback_data": f"expiry_3_{pair}"}],
+            [{"text": "⏱️ 5 minutos", "callback_data": f"expiry_5_{pair}"}],
+            [{"text": "⬅️ Volver", "callback_data": "menu_otc"}]
+        ]
+    }
+
 
 def generate_signal(pair, expiry):
     direction = random.choice(["BUY", "SELL"])
@@ -66,7 +71,7 @@ def generate_signal(pair, expiry):
 
     pair_text = pair.replace("_", "/").replace("/OTC", " OTC")
 
-    return f"""🖤💛 <b>El_Caballo_AI_Pro</b>
+    return f"""🐎 <b>El_Caballo_AI_Pro</b>
 
 {signal}
 📊 <b>{pair_text}</b>
@@ -78,6 +83,7 @@ def generate_signal(pair, expiry):
 
 🕒 Hora de entrada: <b>AHORA</b>"""
 
+
 def handle_callback(data):
     if data == "menu_otc":
         send_message("🌙 <b>Selecciona un par OTC:</b>", otc_menu())
@@ -86,17 +92,17 @@ def handle_callback(data):
         send_message("📈 Forex estará disponible después de terminar OTC.", main_menu())
 
     elif data == "stats":
-        send_message("📊 Estadísticas todavía no disponibles.", main_menu())
+        send_message("📊 Estadísticas todavía no disponibles. Primero activaremos el motor de señales.", main_menu())
 
     elif data == "stop":
-        send_message("⏸ Señales detenidas temporalmente.", main_menu())
+        send_message("⏸️ Señales detenidas temporalmente.", main_menu())
 
     elif data == "back":
         send_message("🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:", main_menu())
 
     elif data.startswith("pair_"):
         pair = data.replace("pair_", "")
-        send_message("⏱ <b>Selecciona expiración:</b>", expiry_menu(pair))
+        send_message("⏱️ <b>Selecciona expiración:</b>", expiry_menu(pair))
 
     elif data.startswith("expiry_"):
         parts = data.split("_", 2)
@@ -104,9 +110,12 @@ def handle_callback(data):
         pair = parts[2]
         send_message(generate_signal(pair, expiry), main_menu())
 
+
 def get_updates():
     global last_update_id
+
     params = {"timeout": 30}
+
     if last_update_id:
         params["offset"] = last_update_id + 1
 
@@ -119,11 +128,12 @@ def get_updates():
 
             if "message" in update:
                 text = update["message"].get("text", "")
-        if text == "/start":
-    send_message(
-        "🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:",
-        main_menu()
-    )
+
+                if text == "/start":
+                    send_message(
+                        "🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:",
+                        main_menu()
+                    )
 
             if "callback_query" in update:
                 handle_callback(update["callback_query"]["data"])
@@ -131,8 +141,9 @@ def get_updates():
     except Exception as e:
         print("Error:", e)
 
+
 print("El_Caballo_AI_Pro V2 activo 24/7")
-send_message("🖤💛 El_Caballo_AI_Pro actualizado: menú OTC + expiración listo.")
+send_message("🖤💛 El_Caballo_AI_Pro actualizado y funcionando.")
 
 while True:
     get_updates()
