@@ -15,7 +15,18 @@ def send_message(text, keyboard=None):
     if keyboard:
         data["reply_markup"] = keyboard
     requests.post(f"{API}/sendMessage", json=data)
+def send_photo(photo_url, caption="", keyboard=None):
+    data = {
+        "chat_id": CHAT_ID,
+        "photo": photo_url,
+        "caption": caption,
+        "parse_mode": "HTML"
+    }
 
+    if keyboard:
+        data["reply_markup"] = keyboard
+
+    requests.post(f"{API}/sendPhoto", json=data)
 def main_menu():
     return {"inline_keyboard": [
         [{"text": "🌙 OTC", "callback_data": "menu_otc"}],
