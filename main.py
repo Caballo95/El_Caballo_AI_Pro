@@ -120,7 +120,11 @@ def get_updates():
             if "message" in update:
                 text = update["message"].get("text", "")
                 if text == "/start":
-                    send_message("🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:", main_menu())
+    send_photo(
+        "https://raw.githubusercontent.com/Caballo95/El_Caballo_AI_Pro/main/ChatGPT%20Imagen%2013%20jun%202026,%2005_57_21%20a.m..png",
+        "🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:",
+        main_menu()
+    )
 
             if "callback_query" in update:
                 handle_callback(update["callback_query"]["data"])
