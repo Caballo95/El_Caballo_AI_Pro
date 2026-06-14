@@ -2,13 +2,37 @@ import os
 import time
 import random
 import requests
-
+import json
+from datetime import datetime
+from pathlib import Path
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 last_update_id = None
+LEARNING_FILE = "learning_data.json"
 
+def load_learning_data():
+    if Path(LEARNING_FILE).exists():
+        with open(LEARNING_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    return {
+        "total_signals": 0,
+        "wins": 0,
+        "losses": 0,
+        "strategies": {},
+        "indicators": {},
+        "history": []
+    }
+
+
+def save_learning_data(data):
+    with open(LEARNING_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+learning_data = load_learning_data()
 
 def send_message(text, keyboard=None):
     data = {
