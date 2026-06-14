@@ -16,11 +16,31 @@ def send_message(text, keyboard=None):
         "text": text,
         "parse_mode": "HTML"
     }
-
     if keyboard:
         data["reply_markup"] = keyboard
 
-    requests.post(f"{API}/sendMessage", json=data)
+    r = requests.post(f"{API}/sendMessage", json=data)
+    return r.json()
+
+
+def edit_message(chat_id, message_id, text, keyboard=None):
+    data = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "parse_mode": "HTML"
+    }
+    if keyboard:
+        data["reply_markup"] = keyboard
+
+    requests.post(f"{API}/editMessageText", json=data)
+
+
+def answer_callback(callback_id):
+    requests.post(
+        f"{API}/answerCallbackQuery",
+        json={"callback_query_id": callback_id}
+    )
 
 
 def main_menu():
@@ -42,7 +62,7 @@ def otc_menu():
             [{"text": "USD/JPY OTC", "callback_data": "pair_USD_JPY_OTC"}],
             [{"text": "AUD/CAD OTC", "callback_data": "pair_AUD_CAD_OTC"}],
             [{"text": "AUD/CHF OTC", "callback_data": "pair_AUD_CHF_OTC"}],
-            [{"text": "⬅️ Volver", "callback_data": "back"}]
+            [{"text": "⬅️ Volver", "callback_data": "back_main"}]
         ]
     }
 
@@ -58,23 +78,26 @@ def expiry_menu(pair):
     }
 
 
+def pair_name(pair):
+    return pair.replace("_", "/").replace("/OTC", " OTC")
+
+
 def generate_signal(pair, expiry):
-    direction = random.choice(["BUY", "SELL"])
-    confidence = random.randint(76, 91)
+    # Temporal: luego quitaremos random y pondremos análisis real
+    seed = int(time.time() // 60) + sum(ord(c) for c in pair) + int(expiry)
+    rng = random.Random(seed)
+
+    direction = rng.choice(["BUY", "SELL"])
+    confidence = rng.randint(76, 91)
     reversal = 100 - confidence
-    volatility = random.randint(55, 82)
+    volatility = rng.randint(55, 82)
 
-    if direction == "BUY":
-        signal = "🟢 COMPRA ARRIBA"
-    else:
-        signal = "🔴 VENTA ABAJO"
+    signal = "🟢 COMPRA ARRIBA" if direction == "BUY" else "🔴 VENTA ABAJO"
 
-    pair_text = pair.replace("_", "/").replace("/OTC", " OTC")
-
-    return f"""🐎 <b>El_Caballo_AI_Pro</b>
+    return f"""🖤💛 <b>El_Caballo_AI_Pro</b>
 
 {signal}
-📊 <b>{pair_text}</b>
+📊 <b>{pair_name(pair)}</b>
 
 ⏱ Expiración: <b>{expiry} minutos</b>
 🎯 Confianza: <b>{confidence}%</b>
@@ -84,31 +107,48 @@ def generate_signal(pair, expiry):
 🕒 Hora de entrada: <b>AHORA</b>"""
 
 
-def handle_callback(data):
+def handle_callback(callback):
+    data = callback["data"]
+    callback_id = callback["id"]
+    chat_id = callback["message"]["chat"]["id"]
+    message_id = callback["message"]["message_id"]
+
+    answer_callback(callback_id)
+
     if data == "menu_otc":
-        send_message("🌙 <b>Selecciona un par OTC:</b>", otc_menu())
+        edit_message(chat_id, message_id, "🌙 <b>Selecciona un par OTC:</b>", otc_menu())
 
     elif data == "menu_forex":
-        send_message("📈 Forex estará disponible después de terminar OTC.", main_menu())
+        edit_message(chat_id, message_id, "📈 Forex estará disponible después de terminar OTC.", main_menu())
 
     elif data == "stats":
-        send_message("📊 Estadísticas todavía no disponibles. Primero activaremos el motor de señales.", main_menu())
+        edit_message(chat_id, message_id, "📊 Estadísticas todavía no disponibles.", main_menu())
 
     elif data == "stop":
-        send_message("⏸️ Señales detenidas temporalmente.", main_menu())
+        edit_message(chat_id, message_id, "⏸️ Señales detenidas temporalmente.", main_menu())
 
-    elif data == "back":
-        send_message("🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:", main_menu())
+    elif data == "back_main":
+        edit_message(
+            chat_id,
+            message_id,
+            "🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:",
+            main_menu()
+        )
 
     elif data.startswith("pair_"):
         pair = data.replace("pair_", "")
-        send_message("⏱️ <b>Selecciona expiración:</b>", expiry_menu(pair))
+        edit_message(
+            chat_id,
+            message_id,
+            f"⏱️ <b>Selecciona expiración para {pair_name(pair)}:</b>",
+            expiry_menu(pair)
+        )
 
     elif data.startswith("expiry_"):
         parts = data.split("_", 2)
         expiry = parts[1]
         pair = parts[2]
-        send_message(generate_signal(pair, expiry), main_menu())
+        edit_message(chat_id, message_id, generate_signal(pair, expiry), main_menu())
 
 
 def get_updates():
@@ -136,14 +176,13 @@ def get_updates():
                     )
 
             if "callback_query" in update:
-                handle_callback(update["callback_query"]["data"])
+                handle_callback(update["callback_query"])
 
     except Exception as e:
         print("Error:", e)
 
 
-print("El_Caballo_AI_Pro V2 activo 24/7")
-send_message("🖤💛 El_Caballo_AI_Pro actualizado y funcionando.")
+print("El_Caballo_AI_Pro V3 menú limpio activo 24/7")
 
 while True:
     get_updates()
