@@ -23,9 +23,12 @@ def load_learning_data():
         "total_signals": 0,
         "wins": 0,
         "losses": 0,
+        "pairs": {},
         "strategies": {},
         "indicators": {},
+        "expiries": {},
         "history": []
+
     }
 
 
@@ -194,15 +197,34 @@ def update_result(signal_id, result):
     found = False
 
     for item in learning_data.get("history", []):
-        if item.get("id") == signal_id:
-            if item.get("result") == "PENDING":
-                item["result"] = result
-                found = True
+    if item.get("id") == signal_id:
+    if item.get("result") == "PENDING":
+       item["result"] = result
+       found = True
+       pair = item.get("pair", "UNKNOWN")
+       strategy = item.get("strategy", "DEFAULT")
+       expiry = str(item.get("expiry", "0"))
 
-                if result == "WIN":
-                    learning_data["wins"] = learning_data.get("wins", 0) + 1
-                elif result == "LOSS":
-                    learning_data["losses"] = learning_data.get("losses", 0) + 1
+       if pair not in learning_data["pairs"]:
+           learning_data["pairs"][pair] = {"wins": 0, "losses": 0}
+
+       if strategy not in learning_data["strategies"]:
+          learning_data["strategies"][strategy] = {"wins": 0, "losses": 0}
+
+       if expiry not in learning_data["expiries"]:
+           learning_data["expiries"][expiry] = {"wins": 0, "losses": 0}
+            
+       if result == "WIN":
+          learning_data["wins"] = learning_data.get("wins", 0) + 1
+          learning_data["pairs"][pair]["wins"] += 1
+          learning_data["strategies"][strategy]["wins"] += 1
+          learning_data["expiries"][expiry]["wins"] += 1
+
+     elif result == "LOSS":
+           learning_data["losses"] = learning_data.get("losses", 0) + 1
+           learning_data["pairs"][pair]["losses"] += 1
+           learning_data["strategies"][strategy]["losses"] += 1
+           learning_data["expiries"][expiry]["losses"] += 1
 
             break
 
