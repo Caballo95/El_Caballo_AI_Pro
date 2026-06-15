@@ -28,7 +28,6 @@ def load_learning_data():
         "indicators": {},
         "expiries": {},
         "history": []
-
     }
 
 
@@ -70,7 +69,10 @@ def edit_message(chat_id, message_id, text, keyboard=None):
 
 
 def answer_callback(callback_id):
-    requests.post(f"{API}/answerCallbackQuery", json={"callback_query_id": callback_id})
+    requests.post(
+        f"{API}/answerCallbackQuery",
+        json={"callback_query_id": callback_id}
+    )
 
 
 def main_menu():
@@ -79,7 +81,7 @@ def main_menu():
             [{"text": "🌙 OTC", "callback_data": "menu_otc"}],
             [{"text": "📈 Forex", "callback_data": "menu_forex"}],
             [{"text": "📊 Estadísticas", "callback_data": "stats"}],
-            [{"text": "⏸ Detener señales", "callback_data": "stop"}]
+            [{"text": "⏸️ Detener señales", "callback_data": "stop"}]
         ]
     }
 
@@ -95,9 +97,13 @@ def otc_menu():
 
     keyboard = []
     for pair in pairs:
-        keyboard.append([{"text": pair.replace("_", "/"), "callback_data": f"pair_{pair}"}])
+        keyboard.append([{
+            "text": pair.replace("_", "/"),
+            "callback_data": f"pair_{pair}"
+        }])
 
     keyboard.append([{"text": "⬅️ Volver", "callback_data": "back_main"}])
+
     return {"inline_keyboard": keyboard}
 
 
@@ -137,7 +143,7 @@ def register_signal(pair, direction, expiry, confidence, reversal, volatility):
         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "pair": pair_name(pair),
         "direction": direction,
-        "expiry": expiry,
+        "expiry": str(expiry),
         "confidence": confidence,
         "reversal": reversal,
         "volatility": volatility,
@@ -182,13 +188,12 @@ def generate_signal(pair, expiry):
 {signal_text}
 📊 <b>{pair_name(pair)}</b>
 
-⏱ Expiración: <b>{expiry} minutos</b>
+⏱️ Expiración: <b>{expiry} minutos</b>
 🎯 Confianza: <b>{confidence}%</b>
 🔄 Probabilidad de reversión: <b>{reversal}%</b>
 📈 Volatilidad: <b>{volatility}/100</b>
 
-🕒 Hora de entrada: <b>AHORA</b>
-"""
+🕘 Hora de entrada: <b>AHORA</b>"""
 
     send_message(text, result_keyboard(signal_id))
 
@@ -197,36 +202,37 @@ def update_result(signal_id, result):
     found = False
 
     for item in learning_data.get("history", []):
-    if item.get("id") == signal_id:
-    if item.get("result") == "PENDING":
-       item["result"] = result
-       found = True
-       pair = item.get("pair", "UNKNOWN")
-       strategy = item.get("strategy", "DEFAULT")
-       expiry = str(item.get("expiry", "0"))
+        if item.get("id") == signal_id:
+            if item.get("result") == "PENDING":
+                item["result"] = result
+                found = True
 
-       if pair not in learning_data["pairs"]:
-           learning_data["pairs"][pair] = {"wins": 0, "losses": 0}
+                pair = item.get("pair", "UNKNOWN")
+                strategy = item.get("strategy", "DEFAULT")
+                expiry = str(item.get("expiry", "0"))
 
-       if strategy not in learning_data["strategies"]:
-          learning_data["strategies"][strategy] = {"wins": 0, "losses": 0}
+                if pair not in learning_data["pairs"]:
+                    learning_data["pairs"][pair] = {"wins": 0, "losses": 0}
 
-       if expiry not in learning_data["expiries"]:
-           learning_data["expiries"][expiry] = {"wins": 0, "losses": 0}
-            
-       if result == "WIN":
-          learning_data["wins"] = learning_data.get("wins", 0) + 1
-          learning_data["pairs"][pair]["wins"] += 1
-          learning_data["strategies"][strategy]["wins"] += 1
-          learning_data["expiries"][expiry]["wins"] += 1
+                if strategy not in learning_data["strategies"]:
+                    learning_data["strategies"][strategy] = {"wins": 0, "losses": 0}
 
-     elif result == "LOSS":
-           learning_data["losses"] = learning_data.get("losses", 0) + 1
-           learning_data["pairs"][pair]["losses"] += 1
-           learning_data["strategies"][strategy]["losses"] += 1
-           learning_data["expiries"][expiry]["losses"] += 1
+                if expiry not in learning_data["expiries"]:
+                    learning_data["expiries"][expiry] = {"wins": 0, "losses": 0}
 
-            break
+                if result == "WIN":
+                    learning_data["wins"] = learning_data.get("wins", 0) + 1
+                    learning_data["pairs"][pair]["wins"] += 1
+                    learning_data["strategies"][strategy]["wins"] += 1
+                    learning_data["expiries"][expiry]["wins"] += 1
+
+                elif result == "LOSS":
+                    learning_data["losses"] = learning_data.get("losses", 0) + 1
+                    learning_data["pairs"][pair]["losses"] += 1
+                    learning_data["strategies"][strategy]["losses"] += 1
+                    learning_data["expiries"][expiry]["losses"] += 1
+
+                break
 
     save_learning_data(learning_data)
     return found
@@ -238,13 +244,29 @@ def stats_text():
     losses = learning_data.get("losses", 0)
     win_rate = round((wins / (wins + losses)) * 100, 2) if (wins + losses) > 0 else 0
 
-    return f"""📊 <b>Estadísticas El_Caballo_AI_Pro</b>
+    text = f"""📊 <b>Estadísticas El_Caballo_AI_Pro</b>
 
-📌 Señales totales: <b>{total}</b>
+⭐ Señales totales: <b>{total}</b>
 ✅ WIN: <b>{wins}</b>
 ❌ LOSS: <b>{losses}</b>
 🎯 Win rate: <b>{win_rate}%</b>
 """
+
+    text += "\n<b>📌 Pares:</b>\n"
+    for pair, data in learning_data.get("pairs", {}).items():
+        w = data.get("wins", 0)
+        l = data.get("losses", 0)
+        wr = round((w / (w + l)) * 100, 2) if (w + l) > 0 else 0
+        text += f"{pair}: {w}W / {l}L — {wr}%\n"
+
+    text += "\n<b>⏱️ Expiraciones:</b>\n"
+    for expiry, data in learning_data.get("expiries", {}).items():
+        w = data.get("wins", 0)
+        l = data.get("losses", 0)
+        wr = round((w / (w + l)) * 100, 2) if (w + l) > 0 else 0
+        text += f"{expiry}m: {w}W / {l}L — {wr}%\n"
+
+    return text
 
 
 def handle_callback(callback):
@@ -265,19 +287,24 @@ def handle_callback(callback):
         edit_message(chat_id, message_id, stats_text(), main_menu())
 
     elif data == "stop":
-        edit_message(chat_id, message_id, "⏸ Señales detenidas temporalmente.", main_menu())
+        edit_message(chat_id, message_id, "⏸️ Señales detenidas temporalmente.", main_menu())
 
     elif data == "back_main":
         edit_message(chat_id, message_id, "🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:", main_menu())
 
     elif data.startswith("pair_"):
         pair = data.replace("pair_", "")
-        edit_message(chat_id, message_id, f"⏱ <b>Selecciona expiración para {pair_name(pair)}:</b>", expiry_menu(pair))
+        edit_message(
+            chat_id,
+            message_id,
+            f"⏱️ <b>Selecciona expiración para {pair_name(pair)}:</b>",
+            expiry_menu(pair)
+        )
 
     elif data.startswith("expiry_"):
         parts = data.split("_")
-        pair = "_".join(parts[1:-1])
         expiry = parts[-1]
+        pair = "_".join(parts[1:-1])
         generate_signal(pair, expiry)
 
     elif data.startswith("win_"):
