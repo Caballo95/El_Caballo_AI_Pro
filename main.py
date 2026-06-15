@@ -118,19 +118,19 @@ def generate_signal(pair, expiry):
 
     signal = "🟢 COMPRA ARRIBA" if direction == "BUY" else "🔴 VENTA ABAJO"
 
-        return f"""
-<b>El_Caballo_AI_Pro</b>
+    return f"""
+    <b>El_Caballo_AI_Pro</b>
 
-{signal}
-<b>{pair_name(pair)}</b>
+    {signal}
+    <b>{pair_name(pair)}</b>
 
-Expiración: <b>{expiry} minutos</b>
-Confianza: <b>{confidence}%</b>
-Probabilidad de reversión: <b>{reversal}%</b>
-Volatilidad: <b>{volatility}/100</b>
+    Expiración: <b>{expiry} minutos</b>
+    Confianza: <b>{confidence}%</b>
+    Probabilidad de reversión: <b>{reversal}%</b>
+    Volatilidad: <b>{volatility}/100</b>
 
-Hora de entrada: <b>AHORA</b>
-         """
+    Hora de entrada: <b>AHORA</b>
+    """
 
 
 def handle_callback(callback):
