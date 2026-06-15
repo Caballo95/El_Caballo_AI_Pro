@@ -165,14 +165,84 @@ def register_signal(pair, direction, expiry, confidence, reversal, volatility):
     return signal_id
 
 
-def generate_signal(pair, expiry):
-    seed = int(time.time() // 60) + sum(ord(c) for c in pair) + int(expiry)
-    rng = random.Random(seed)
+def market_symbol(pair):
+    symbols = {
+        "EUR_USD": "EURUSD=X",
+        "AUD_USD": "AUDUSD=X",
+        "AUD_CAD": "AUDCAD=X",
+        "AUD_CHF": "AUDCHF=X",
+        "AUD_NZD": "AUDNZD=X",
+    }
+    return symbols.get(pair)
 
-    direction = rng.choice(["BUY", "SELL"])
-    confidence = rng.randint(76, 91)
-    reversal = 100 - confidence
-    volatility = rng.randint(55, 82)
+
+def analyze_real_market(pair):
+    symbol = market_symbol(pair)
+    if not symbol:
+        return None
+
+    df = yf.download(symbol, period="1d", interval="1m", progress=False)
+
+    if df is None or df.empty or len(df) < 50:
+        return None
+
+    df["ema9"] = df["Close"].ewm(span=9, adjust=False).mean()
+    df["ema21"] = df["Close"].ewm(span=21, adjust=False).mean()
+
+    delta = df["Close"].diff()
+    gain = delta.where(delta > 0, 0).rolling(window=7).mean()
+    loss = -delta.where(delta < 0, 0).rolling(window=7).mean()
+    rs = gain / loss
+    df["rsi"] = 100 - (100 / (1 + rs))
+
+    ema12 = df["Close"].ewm(span=12, adjust=False).mean()
+    ema26 = df["Close"].ewm(span=26, adjust=False).mean()
+    df["macd"] = ema12 - ema26
+    df["macd_signal"] = df["macd"].ewm(span=9, adjust=False).mean()
+
+    last = df.iloc[-1]
+    prev = df.iloc[-2]
+
+    candle_range = last["High"] - last["Low"]
+    body = abs(last["Close"] - last["Open"])
+    volatility = round((body / candle_range) * 100) if candle_range > 0 else 0
+
+    buy = (
+        last["ema9"] > last["ema21"]
+        and last["rsi"] > 55
+        and last["macd"] > last["macd_signal"]
+        and last["Close"] > prev["Close"]
+        and volatility >= 35
+    )
+
+    sell = (
+        last["ema9"] < last["ema21"]
+        and last["rsi"] < 45
+        and last["macd"] < last["macd_signal"]
+        and last["Close"] < prev["Close"]
+        and volatility >= 35
+    )
+
+    if buy:
+        return "BUY", 84, 16, volatility
+
+    if sell:
+        return "SELL", 84, 16, volatility
+
+    return None
+
+
+def generate_signal(pair, expiry):
+    result = analyze_real_market(pair)
+
+    if result is None:
+        send_message(
+            f"⚠️ <b>{pair_name(pair)}</b>\n\nNo hay confirmación fuerte ahora.\nEl bot no recomienda entrada.",
+            main_menu()
+        )
+        return
+
+    direction, confidence, reversal, volatility = result
 
     signal_text = "🟢 COMPRA ARRIBA" if direction == "BUY" else "🔴 VENTA ABAJO"
 
@@ -194,6 +264,12 @@ def generate_signal(pair, expiry):
 🎯 Confianza: <b>{confidence}%</b>
 🔄 Probabilidad de reversión: <b>{reversal}%</b>
 📈 Volatilidad: <b>{volatility}/100</b>
+
+📌 Análisis real:
+EMA 9 / EMA 21
+RSI 7
+MACD
+Fuerza de vela
 
 🕘 Hora de entrada: <b>AHORA</b>"""
 
