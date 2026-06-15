@@ -5,7 +5,9 @@ import requests
 import json
 from pathlib import Path
 from datetime import datetime
-
+import pandas as pd
+import yfinance as yf
+import ta
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
