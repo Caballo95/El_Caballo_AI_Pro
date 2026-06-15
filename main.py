@@ -146,7 +146,19 @@ def handle_callback(callback):
         edit_message(chat_id, message_id, "📈 Forex estará disponible después de terminar OTC.", main_menu())
 
     elif data == "stats":
-        edit_message(chat_id, message_id, "📊 Estadísticas todavía no disponibles.", main_menu())
+        total = learning_data.get("total_signals", 0)
+        wins = learning_data.get("wins", 0)
+        losses = learning_data.get("losses", 0)
+        win_rate = round((wins / total) * 100, 2) if total > 0 else 0
+
+        stats_text = f"""📊 <b>Estadísticas El_Caballo_AI_Pro</b>
+
+📌 Señales totales: <b>{total}</b>
+✅ WIN: <b>{wins}</b>
+❌ LOSS: <b>{losses}</b>
+🎯 Win rate: <b>{win_rate}%</b>
+"""
+         edit_message(chat_id, message_id, stats_text, main_menu())
 
     elif data == "stop":
         edit_message(chat_id, message_id, "⏸️ Señales detenidas temporalmente.", main_menu())
