@@ -359,14 +359,14 @@ def handle_callback(callback):
         edit_message(chat_id, message_id, "🌙 <b>Selecciona un par OTC:</b>", otc_menu())
 
     elif data == "menu_forex":
-    keyboard = {
-        "inline_keyboard": [
-            [{"text": "EUR/USD", "callback_data": "pair_EUR_USD"}],
-            [{"text": "AUD/USD", "callback_data": "pair_AUD_USD"}],
-            [{"text": "AUD/CAD", "callback_data": "pair_AUD_CAD"}],
-            [{"text": "AUD/CHF", "callback_data": "pair_AUD_CHF"}],
-            [{"text": "AUD/NZD", "callback_data": "pair_AUD_NZD"}],
-            [{"text": "⬅️ Volver", "callback_data": "back_main"}]
+        keyboard = {
+            "inline_keyboard": [
+             [{"text": "EUR/USD", "callback_data": "pair_EUR_USD"}],
+             [{"text": "AUD/USD", "callback_data": "pair_AUD_USD"}],
+             [{"text": "AUD/CAD", "callback_data": "pair_AUD_CAD"}],
+             [{"text": "AUD/CHF", "callback_data": "pair_AUD_CHF"}],
+             [{"text": "AUD/NZD", "callback_data": "pair_AUD_NZD"}],
+             [{"text": "⬅️ Volver", "callback_data": "back_main"}]
         ]
     }
     edit_message(chat_id, message_id, "📈 <b>Selecciona un par Forex mercado real:</b>", keyboard)
