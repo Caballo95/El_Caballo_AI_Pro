@@ -19,6 +19,11 @@ FOREX_PAIRS = {
     "AUD_CAD": {"name": "AUD/CAD", "symbol": "AUDCAD=X"},
     "AUD_CHF": {"name": "AUD/CHF", "symbol": "AUDCHF=X"},
     "AUD_NZD": {"name": "AUD/NZD", "symbol": "AUDNZD=X"},
+
+    "GBP_USD": {"name": "GBP/USD", "symbol": "GBPUSD=X"},
+    "GBP_CAD": {"name": "GBP/CAD", "symbol": "GBPCAD=X"},
+    "GBP_JPY": {"name": "GBP/JPY", "symbol": "GBPJPY=X"}
+}
 }
 
 
@@ -28,10 +33,7 @@ def default_learning_data():
         "wins": 0,
         "losses": 0,
         "pairs": {},
-        "strategies": {},
-        "indicators": {},
         "expiries": {},
-        "markets": {},
         "history": []
     }
 
@@ -126,6 +128,9 @@ def forex_menu():
             [{"text": "AUD/CAD", "callback_data": "pair_AUD_CAD"}],
             [{"text": "AUD/CHF", "callback_data": "pair_AUD_CHF"}],
             [{"text": "AUD/NZD", "callback_data": "pair_AUD_NZD"}],
+            [{"text": "GBP/USD", "callback_data": "pair_GBP_USD"}],
+            [{"text": "GBP/CAD", "callback_data": "pair_GBP_CAD"}],
+            [{"text": "GBP/JPY", "callback_data": "pair_GBP_JPY"}],
             [{"text": "⬅️ Volver", "callback_data": "back_main"}]
         ]
     }
@@ -166,12 +171,20 @@ def get_forex_data(pair):
 
     symbol = info["symbol"]
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-    params = {"range": "1d", "interval": "1m"}
-    headers = {"User-Agent": "Mozilla/5.0"}
+
+    params = {
+        "range": "1d",
+        "interval": "1m"
+    }
+
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
 
     try:
         r = requests.get(url, params=params, headers=headers, timeout=8)
         data = r.json()
+
         result = data["chart"]["result"][0]
         quote = result["indicators"]["quote"][0]
 
@@ -179,8 +192,7 @@ def get_forex_data(pair):
             "open": quote["open"],
             "high": quote["high"],
             "low": quote["low"],
-            "close": quote["close"],
-            "volume": quote.get("volume", [])
+            "close": quote["close"]
         }).dropna()
 
         if len(df) < 60:
@@ -213,7 +225,12 @@ def analyze_real_market(pair):
     df = get_forex_data(pair)
 
     if df is None or df.empty:
-        return None
+        return {
+            "direction": "NO_DATA",
+            "confidence": 0,
+            "reversal": 100,
+            "volatility": 0
+        }
 
     df["ema9"] = df["close"].ewm(span=9, adjust=False).mean()
     df["ema21"] = df["close"].ewm(span=21, adjust=False).mean()
@@ -222,9 +239,20 @@ def analyze_real_market(pair):
 
     ema12 = df["close"].ewm(span=12, adjust=False).mean()
     ema26 = df["close"].ewm(span=26, adjust=False).mean()
+
     df["macd"] = ema12 - ema26
     df["macd_signal"] = df["macd"].ewm(span=9, adjust=False).mean()
     df["atr"] = calculate_atr(df, 14)
+
+    df = df.dropna()
+
+    if len(df) < 20:
+        return {
+            "direction": "NO_DATA",
+            "confidence": 0,
+            "reversal": 100,
+            "volatility": 0
+        }
 
     last = df.iloc[-1]
     prev = df.iloc[-2]
@@ -233,98 +261,81 @@ def analyze_real_market(pair):
     body = abs(last["close"] - last["open"])
     body_ratio = body / candle_range if candle_range > 0 else 0
 
-    atr_now = last["atr"]
-    atr_avg = df["atr"].tail(30).mean()
-    volatility = int(min(100, max(1, round((atr_now / atr_avg) * 60)))) if atr_avg and atr_avg > 0 else 50
+    atr_now = float(last["atr"])
+    atr_avg = float(df["atr"].tail(30).mean())
+
+    volatility = int(min(100, max(1, round((atr_now / atr_avg) * 60)))) if atr_avg > 0 else 50
 
     support = df["low"].tail(25).min()
     resistance = df["high"].tail(25).max()
 
-    near_support = last["close"] <= support + (atr_now * 0.8) if atr_now > 0 else False
-    near_resistance = last["close"] >= resistance - (atr_now * 0.8) if atr_now > 0 else False
+    near_support = last["close"] <= support + (atr_now * 0.8)
+    near_resistance = last["close"] >= resistance - (atr_now * 0.8)
 
-    buy_score = 0
-    sell_score = 0
+    buy_score = 45
+    sell_score = 45
 
-    if last["ema9"] > last["ema21"] > last["ema50"]:
-        buy_score += 30
+    if last["ema9"] > last["ema21"]:
+        buy_score += 12
+    else:
+        sell_score += 12
 
-    if last["ema9"] < last["ema21"] < last["ema50"]:
-        sell_score += 30
+    if last["ema21"] > last["ema50"]:
+        buy_score += 8
+    else:
+        sell_score += 8
 
-    if 52 <= last["rsi"] <= 72:
-        buy_score += 20
-
-    if 28 <= last["rsi"] <= 48:
-        sell_score += 20
-
-    if last["macd"] > last["macd_signal"]:
-        buy_score += 20
-
-    if last["macd"] < last["macd_signal"]:
-        sell_score += 20
-
-    if last["close"] > prev["close"] and body_ratio >= 0.35:
-        buy_score += 15
-
-    if last["close"] < prev["close"] and body_ratio >= 0.35:
-        sell_score += 15
-
-    if near_support:
+    if last["rsi"] > 50:
         buy_score += 10
-
-    if near_resistance:
+    else:
         sell_score += 10
 
-    if volatility >= 35:
+    if last["macd"] > last["macd_signal"]:
+        buy_score += 12
+    else:
+        sell_score += 12
+
+    if last["close"] > prev["close"]:
+        buy_score += 8
+    else:
+        sell_score += 8
+
+    if body_ratio >= 0.35:
+        if last["close"] > last["open"]:
+            buy_score += 5
+        else:
+            sell_score += 5
+
+    if near_support:
         buy_score += 5
+
+    if near_resistance:
         sell_score += 5
 
-    if buy_score >= 75 and buy_score > sell_score:
-        confidence = min(94, buy_score)
-        return {
-            "direction": "BUY",
-            "confidence": confidence,
-            "reversal": 100 - confidence,
-            "volatility": volatility,
-            "strategy": "Forex Real V1",
-            "indicators": {
-                "ema9": round(float(last["ema9"]), 6),
-                "ema21": round(float(last["ema21"]), 6),
-                "ema50": round(float(last["ema50"]), 6),
-                "rsi7": round(float(last["rsi"]), 2),
-                "macd": round(float(last["macd"]), 6),
-                "macd_signal": round(float(last["macd_signal"]), 6),
-                "atr": round(float(atr_now), 6),
-                "body_ratio": round(float(body_ratio), 2),
-                "support": round(float(support), 6),
-                "resistance": round(float(resistance), 6)
-            }
-        }
+    if volatility < 25:
+        buy_score -= 8
+        sell_score -= 8
 
-    if sell_score >= 75 and sell_score > buy_score:
-        confidence = min(94, sell_score)
-        return {
-            "direction": "SELL",
-            "confidence": confidence,
-            "reversal": 100 - confidence,
-            "volatility": volatility,
-            "strategy": "Forex Real V1",
-            "indicators": {
-                "ema9": round(float(last["ema9"]), 6),
-                "ema21": round(float(last["ema21"]), 6),
-                "ema50": round(float(last["ema50"]), 6),
-                "rsi7": round(float(last["rsi"]), 2),
-                "macd": round(float(last["macd"]), 6),
-                "macd_signal": round(float(last["macd_signal"]), 6),
-                "atr": round(float(atr_now), 6),
-                "body_ratio": round(float(body_ratio), 2),
-                "support": round(float(support), 6),
-                "resistance": round(float(resistance), 6)
-            }
-        }
+    if volatility > 80:
+        buy_score -= 5
+        sell_score -= 5
 
-    return None
+    if buy_score >= sell_score:
+        direction = "BUY"
+        confidence = buy_score
+    else:
+        direction = "SELL"
+        confidence = sell_score
+
+    confidence = int(max(60, min(94, confidence)))
+    reversal = 100 - confidence
+
+    return {
+        "direction": direction,
+        "confidence": confidence,
+        "reversal": reversal,
+        "volatility": volatility
+    }
 
 
 def register_signal(pair, analysis, expiry):
@@ -341,9 +352,7 @@ def register_signal(pair, analysis, expiry):
         "confidence": analysis["confidence"],
         "reversal": analysis["reversal"],
         "volatility": analysis["volatility"],
-        "result": "PENDING",
-        "strategy": analysis["strategy"],
-        "indicators": analysis["indicators"]
+        "result": "PENDING"
     }
 
     learning_data["total_signals"] = learning_data.get("total_signals", 0) + 1
@@ -356,10 +365,9 @@ def register_signal(pair, analysis, expiry):
 def generate_signal(pair, expiry):
     analysis = analyze_real_market(pair)
 
-    if analysis is None:
+    if analysis["direction"] == "NO_DATA":
         send_message(
-            f"⚠️ <b>{pair_name(pair)}</b>\n\nNo hay entrada fuerte ahora.\nEl bot espera una mejor oportunidad.",
-            main_menu()
+            f"⚠️ <b>{pair_name(pair)}</b>\n\nNo pude leer datos del mercado ahora.\nPrueba nuevamente en unos segundos."
         )
         return
 
@@ -378,30 +386,13 @@ def generate_signal(pair, expiry):
 📊 <b>{pair_name(pair)}</b>
 
 ⏱ Expiración: <b>{expiry} minutos</b>
-🎯 Confianza: <b>{confidence}%</b>
-🔄 Probabilidad de reversión: <b>{reversal}%</b>
+🎯 Probabilidad: <b>{confidence}%</b>
+🔄 Reversión: <b>{reversal}%</b>
 📈 Volatilidad: <b>{volatility}/100</b>
 
-🕐 Hora de entrada: <b>AHORA</b>"""
+🕐 Entrada: <b>AHORA</b>"""
 
     send_message(text, result_keyboard(signal_id))
-
-
-def ensure_stat_group(group_name, key):
-    if group_name not in learning_data:
-        learning_data[group_name] = {}
-
-    if key not in learning_data[group_name]:
-        learning_data[group_name][key] = {"wins": 0, "losses": 0}
-
-
-def add_result_to_group(group_name, key, result):
-    ensure_stat_group(group_name, key)
-
-    if result == "WIN":
-        learning_data[group_name][key]["wins"] += 1
-    elif result == "LOSS":
-        learning_data[group_name][key]["losses"] += 1
 
 
 def update_result(signal_id, result):
@@ -417,13 +408,21 @@ def update_result(signal_id, result):
             elif result == "LOSS":
                 learning_data["losses"] = learning_data.get("losses", 0) + 1
 
-            add_result_to_group("pairs", item.get("pair", "UNKNOWN"), result)
-            add_result_to_group("strategies", item.get("strategy", "UNKNOWN"), result)
-            add_result_to_group("expiries", str(item.get("expiry", "0")), result)
-            add_result_to_group("markets", item.get("market", "UNKNOWN"), result)
+            pair = item.get("pair", "UNKNOWN")
+            expiry = str(item.get("expiry", "0"))
 
-            for indicator_name in item.get("indicators", {}).keys():
-                add_result_to_group("indicators", indicator_name, result)
+            if pair not in learning_data["pairs"]:
+                learning_data["pairs"][pair] = {"wins": 0, "losses": 0}
+
+            if expiry not in learning_data["expiries"]:
+                learning_data["expiries"][expiry] = {"wins": 0, "losses": 0}
+
+            if result == "WIN":
+                learning_data["pairs"][pair]["wins"] += 1
+                learning_data["expiries"][expiry]["wins"] += 1
+            else:
+                learning_data["pairs"][pair]["losses"] += 1
+                learning_data["expiries"][expiry]["losses"] += 1
 
             break
 
@@ -431,15 +430,14 @@ def update_result(signal_id, result):
     return found
 
 
-def group_stats_text(title, group):
+def group_stats(title, group):
     text = f"\n<b>{title}</b>\n"
     data = learning_data.get(group, {})
 
     if not data:
-        text += "Sin datos todavía.\n"
-        return text
+        return text + "Sin datos todavía.\n"
 
-    for name, values in list(data.items())[:10]:
+    for name, values in data.items():
         wins = values.get("wins", 0)
         losses = values.get("losses", 0)
         total = wins + losses
@@ -464,9 +462,8 @@ def stats_text():
 🎯 Win rate: <b>{win_rate}%</b>
 """
 
-    text += group_stats_text("📌 Pares", "pairs")
-    text += group_stats_text("🧠 Estrategias", "strategies")
-    text += group_stats_text("⏱ Expiraciones", "expiries")
+    text += group_stats("📌 Pares", "pairs")
+    text += group_stats("⏱ Expiraciones", "expiries")
 
     return text
 
@@ -480,13 +477,18 @@ def handle_callback(callback):
     answer_callback(callback_id)
 
     if data == "menu_forex":
-        edit_message(chat_id, message_id, "📈 <b>Selecciona un par Forex mercado real:</b>", forex_menu())
+        edit_message(
+            chat_id,
+            message_id,
+            "📈 <b>Selecciona un par Forex mercado real:</b>",
+            forex_menu()
+        )
 
     elif data == "menu_otc":
         edit_message(
             chat_id,
             message_id,
-            "🌙 <b>OTC todavía no está conectado a datos reales.</b>\n\nPrimero trabajaremos Forex real.",
+            "🌙 <b>OTC todavía no está conectado a datos reales.</b>\n\nPrimero dejamos Forex real funcionando perfecto.",
             main_menu()
         )
 
@@ -494,18 +496,33 @@ def handle_callback(callback):
         edit_message(chat_id, message_id, stats_text(), main_menu())
 
     elif data == "back_main":
-        edit_message(chat_id, message_id, "🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:", main_menu())
+        edit_message(
+            chat_id,
+            message_id,
+            "🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:",
+            main_menu()
+        )
 
     elif data.startswith("pair_"):
         pair = data.replace("pair_", "")
-        edit_message(chat_id, message_id, f"⏱ <b>Selecciona expiración para {pair_name(pair)}:</b>", expiry_menu(pair))
+        edit_message(
+            chat_id,
+            message_id,
+            f"⏱ <b>Selecciona expiración para {pair_name(pair)}:</b>",
+            expiry_menu(pair)
+        )
 
     elif data.startswith("expiry_"):
         parts = data.split("_")
         expiry = parts[-1]
         pair = "_".join(parts[1:-1])
 
-        edit_message(chat_id, message_id, f"🔎 Analizando <b>{pair_name(pair)}</b>...", main_menu())
+        edit_message(
+            chat_id,
+            message_id,
+            f"🔎 Analizando <b>{pair_name(pair)}</b>..."
+        )
+
         generate_signal(pair, expiry)
 
     elif data.startswith("win_"):
@@ -525,7 +542,10 @@ def handle_message(message):
     text = message.get("text", "")
 
     if text == "/start":
-        send_message("🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:", main_menu())
+        send_message(
+            "🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:",
+            main_menu()
+        )
 
 
 def get_updates():
