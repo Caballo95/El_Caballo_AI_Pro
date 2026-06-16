@@ -26,14 +26,7 @@ FOREX_PAIRS = {
 
 
 def default_learning_data():
-    return {
-        "total_signals": 0,
-        "wins": 0,
-        "losses": 0,
-        "pairs": {},
-        "expiries": {},
-        "history": []
-    }
+    return {"total_signals": 0, "wins": 0, "losses": 0, "pairs": {}, "expiries": {}, "history": []}
 
 
 def load_learning_data():
@@ -47,10 +40,9 @@ def load_learning_data():
         data = default_learning_data()
 
     base = default_learning_data()
-    for key, value in base.items():
-        if key not in data:
-            data[key] = value
-
+    for k, v in base.items():
+        if k not in data:
+            data[k] = v
     return data
 
 
@@ -63,99 +55,72 @@ learning_data = load_learning_data()
 
 
 def send_message(text, keyboard=None):
-    data = {
-        "chat_id": CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML"
-    }
-
+    payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
     if keyboard:
-        data["reply_markup"] = keyboard
-
+        payload["reply_markup"] = keyboard
     try:
-        return requests.post(f"{API}/sendMessage", json=data, timeout=10).json()
+        return requests.post(f"{API}/sendMessage", json=payload, timeout=10).json()
     except Exception as e:
         print("SEND_ERROR:", e)
-        return None
 
 
 def edit_message(chat_id, message_id, text, keyboard=None):
-    data = {
-        "chat_id": chat_id,
-        "message_id": message_id,
-        "text": text,
-        "parse_mode": "HTML"
-    }
-
+    payload = {"chat_id": chat_id, "message_id": message_id, "text": text, "parse_mode": "HTML"}
     if keyboard:
-        data["reply_markup"] = keyboard
-
+        payload["reply_markup"] = keyboard
     try:
-        return requests.post(f"{API}/editMessageText", json=data, timeout=10).json()
+        return requests.post(f"{API}/editMessageText", json=payload, timeout=10).json()
     except Exception as e:
         print("EDIT_ERROR:", e)
-        return None
 
 
 def answer_callback(callback_id):
     try:
-        requests.post(
-            f"{API}/answerCallbackQuery",
-            json={"callback_query_id": callback_id},
-            timeout=10
-        )
+        requests.post(f"{API}/answerCallbackQuery", json={"callback_query_id": callback_id}, timeout=10)
     except Exception as e:
         print("CALLBACK_ERROR:", e)
 
 
 def main_menu():
-    return {
-        "inline_keyboard": [
-            [{"text": "📈 Forex mercado real", "callback_data": "menu_forex"}],
-            [{"text": "🌙 OTC", "callback_data": "menu_otc"}],
-            [{"text": "📊 Estadísticas", "callback_data": "stats"}]
-        ]
-    }
+    return {"inline_keyboard": [
+        [{"text": "📈 Forex mercado real", "callback_data": "menu_forex"}],
+        [{"text": "🌙 OTC", "callback_data": "menu_otc"}],
+        [{"text": "📊 Estadísticas", "callback_data": "stats"}]
+    ]}
 
 
 def forex_menu():
-    return {
-        "inline_keyboard": [
-            [{"text": "EUR/USD", "callback_data": "pair_EUR_USD"}],
-            [{"text": "AUD/USD", "callback_data": "pair_AUD_USD"}],
-            [{"text": "AUD/CAD", "callback_data": "pair_AUD_CAD"}],
-            [{"text": "AUD/CHF", "callback_data": "pair_AUD_CHF"}],
-            [{"text": "AUD/NZD", "callback_data": "pair_AUD_NZD"}],
-            [{"text": "GBP/USD", "callback_data": "pair_GBP_USD"}],
-            [{"text": "GBP/CAD", "callback_data": "pair_GBP_CAD"}],
-            [{"text": "GBP/JPY", "callback_data": "pair_GBP_JPY"}],
-            [{"text": "⬅️ Volver", "callback_data": "back_main"}]
-        ]
-    }
+    return {"inline_keyboard": [
+        [{"text": "EUR/USD", "callback_data": "pair_EUR_USD"}],
+        [{"text": "AUD/USD", "callback_data": "pair_AUD_USD"}],
+        [{"text": "AUD/CAD", "callback_data": "pair_AUD_CAD"}],
+        [{"text": "AUD/CHF", "callback_data": "pair_AUD_CHF"}],
+        [{"text": "AUD/NZD", "callback_data": "pair_AUD_NZD"}],
+        [{"text": "GBP/USD", "callback_data": "pair_GBP_USD"}],
+        [{"text": "GBP/CAD", "callback_data": "pair_GBP_CAD"}],
+        [{"text": "GBP/JPY", "callback_data": "pair_GBP_JPY"}],
+        [{"text": "⬅️ Volver", "callback_data": "back_main"}]
+    ]}
 
 
 def expiry_menu(pair):
-    return {
-        "inline_keyboard": [
-            [{"text": "1 minuto", "callback_data": f"expiry_{pair}_1"}],
-            [{"text": "2 minutos", "callback_data": f"expiry_{pair}_2"}],
-            [{"text": "3 minutos", "callback_data": f"expiry_{pair}_3"}],
-            [{"text": "5 minutos", "callback_data": f"expiry_{pair}_5"}],
-            [{"text": "⬅️ Volver", "callback_data": "menu_forex"}]
-        ]
-    }
+    return {"inline_keyboard": [
+        [{"text": "1 minuto", "callback_data": f"expiry_{pair}_1"}],
+        [{"text": "2 minutos", "callback_data": f"expiry_{pair}_2"}],
+        [{"text": "3 minutos", "callback_data": f"expiry_{pair}_3"}],
+        [{"text": "5 minutos", "callback_data": f"expiry_{pair}_5"}],
+        [{"text": "⬅️ Volver", "callback_data": "menu_forex"}]
+    ]}
 
 
 def result_keyboard(signal_id):
-    return {
-        "inline_keyboard": [
-            [
-                {"text": "✅ WIN", "callback_data": f"win_{signal_id}"},
-                {"text": "❌ LOSS", "callback_data": f"loss_{signal_id}"}
-            ],
-            [{"text": "📊 Estadísticas", "callback_data": "stats"}]
-        ]
-    }
+    return {"inline_keyboard": [
+        [
+            {"text": "✅ WIN", "callback_data": f"win_{signal_id}"},
+            {"text": "❌ LOSS", "callback_data": f"loss_{signal_id}"}
+        ],
+        [{"text": "📊 Estadísticas", "callback_data": "stats"}]
+    ]}
 
 
 def pair_name(pair):
@@ -167,22 +132,13 @@ def get_forex_data(pair):
     if not info:
         return None
 
-    symbol = info["symbol"]
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-
-    params = {
-        "range": "1d",
-        "interval": "1m"
-    }
-
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{info['symbol']}"
+    params = {"range": "1d", "interval": "1m"}
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     try:
         r = requests.get(url, params=params, headers=headers, timeout=8)
         data = r.json()
-
         result = data["chart"]["result"][0]
         quote = result["indicators"]["quote"][0]
 
@@ -193,9 +149,8 @@ def get_forex_data(pair):
             "close": quote["close"]
         }).dropna()
 
-        if len(df) < 60:
+        if len(df) < 80:
             return None
-
         return df
 
     except Exception as e:
@@ -203,7 +158,7 @@ def get_forex_data(pair):
         return None
 
 
-def calculate_rsi(close, length=7):
+def rsi(close, length=7):
     delta = close.diff()
     gain = delta.where(delta > 0, 0).rolling(length).mean()
     loss = -delta.where(delta < 0, 0).rolling(length).mean()
@@ -211,110 +166,133 @@ def calculate_rsi(close, length=7):
     return 100 - (100 / (1 + rs))
 
 
-def calculate_atr(df, length=14):
-    high_low = df["high"] - df["low"]
-    high_close = (df["high"] - df["close"].shift()).abs()
-    low_close = (df["low"] - df["close"].shift()).abs()
-    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-    return true_range.rolling(length).mean()
+def atr(df, length=14):
+    hl = df["high"] - df["low"]
+    hc = (df["high"] - df["close"].shift()).abs()
+    lc = (df["low"] - df["close"].shift()).abs()
+    tr = pd.concat([hl, hc, lc], axis=1).max(axis=1)
+    return tr.rolling(length).mean()
+
+
+def adx(df, length=14):
+    up = df["high"].diff()
+    down = -df["low"].diff()
+
+    plus_dm = up.where((up > down) & (up > 0), 0)
+    minus_dm = down.where((down > up) & (down > 0), 0)
+
+    tr = atr(df, length)
+    plus_di = 100 * (plus_dm.rolling(length).mean() / tr)
+    minus_di = 100 * (minus_dm.rolling(length).mean() / tr)
+
+    dx = (abs(plus_di - minus_di) / (plus_di + minus_di)) * 100
+    return dx.rolling(length).mean()
+
+
+def candle_signal(last, prev):
+    body = abs(last["close"] - last["open"])
+    candle_range = last["high"] - last["low"]
+    ratio = body / candle_range if candle_range > 0 else 0
+
+    bullish = last["close"] > last["open"]
+    bearish = last["close"] < last["open"]
+
+    engulf_buy = bullish and prev["close"] < prev["open"] and last["close"] > prev["open"] and last["open"] < prev["close"]
+    engulf_sell = bearish and prev["close"] > prev["open"] and last["close"] < prev["open"] and last["open"] > prev["close"]
+
+    if engulf_buy or (bullish and ratio >= 0.45):
+        return "BUY", ratio
+    if engulf_sell or (bearish and ratio >= 0.45):
+        return "SELL", ratio
+    return "NEUTRAL", ratio
 
 
 def analyze_real_market(pair):
     df = get_forex_data(pair)
-
-    if df is None or df.empty:
-        return {
-            "direction": "NO_DATA",
-            "confidence": 0,
-            "reversal": 100,
-            "volatility": 0
-        }
+    if df is None:
+        return {"direction": "NO_DATA"}
 
     df["ema9"] = df["close"].ewm(span=9, adjust=False).mean()
     df["ema21"] = df["close"].ewm(span=21, adjust=False).mean()
     df["ema50"] = df["close"].ewm(span=50, adjust=False).mean()
-    df["rsi"] = calculate_rsi(df["close"], 7)
+    df["ema200"] = df["close"].ewm(span=200, adjust=False).mean()
+    df["rsi7"] = rsi(df["close"], 7)
 
     ema12 = df["close"].ewm(span=12, adjust=False).mean()
     ema26 = df["close"].ewm(span=26, adjust=False).mean()
-
     df["macd"] = ema12 - ema26
     df["macd_signal"] = df["macd"].ewm(span=9, adjust=False).mean()
-    df["atr"] = calculate_atr(df, 14)
 
+    df["atr"] = atr(df, 14)
+    df["adx"] = adx(df, 14)
     df = df.dropna()
 
-    if len(df) < 20:
-        return {
-            "direction": "NO_DATA",
-            "confidence": 0,
-            "reversal": 100,
-            "volatility": 0
-        }
+    if len(df) < 40:
+        return {"direction": "NO_DATA"}
 
     last = df.iloc[-1]
     prev = df.iloc[-2]
 
-    candle_range = last["high"] - last["low"]
-    body = abs(last["close"] - last["open"])
-    body_ratio = body / candle_range if candle_range > 0 else 0
+    candle_dir, body_ratio = candle_signal(last, prev)
 
     atr_now = float(last["atr"])
     atr_avg = float(df["atr"].tail(30).mean())
-
     volatility = int(min(100, max(1, round((atr_now / atr_avg) * 60)))) if atr_avg > 0 else 50
 
     support = df["low"].tail(25).min()
     resistance = df["high"].tail(25).max()
-
     near_support = last["close"] <= support + (atr_now * 0.8)
     near_resistance = last["close"] >= resistance - (atr_now * 0.8)
 
-    buy_score = 45
-    sell_score = 45
+    buy_score = 50
+    sell_score = 50
 
     if last["ema9"] > last["ema21"]:
-        buy_score += 12
-    else:
-        sell_score += 12
-
-    if last["ema21"] > last["ema50"]:
         buy_score += 8
     else:
         sell_score += 8
 
-    if last["rsi"] > 50:
+    if last["ema50"] > last["ema200"]:
         buy_score += 10
     else:
         sell_score += 10
 
+    if last["close"] > last["ema50"]:
+        buy_score += 7
+    else:
+        sell_score += 7
+
+    if last["rsi7"] > 52:
+        buy_score += 9
+    elif last["rsi7"] < 48:
+        sell_score += 9
+
     if last["macd"] > last["macd_signal"]:
-        buy_score += 12
+        buy_score += 10
     else:
-        sell_score += 12
+        sell_score += 10
 
-    if last["close"] > prev["close"]:
+    if last["adx"] >= 18:
+        buy_score += 5
+        sell_score += 5
+    else:
+        buy_score -= 8
+        sell_score -= 8
+
+    if candle_dir == "BUY":
         buy_score += 8
-    else:
+    elif candle_dir == "SELL":
         sell_score += 8
-
-    if body_ratio >= 0.35:
-        if last["close"] > last["open"]:
-            buy_score += 5
-        else:
-            sell_score += 5
 
     if near_support:
         buy_score += 5
-
     if near_resistance:
         sell_score += 5
 
     if volatility < 25:
         buy_score -= 8
         sell_score -= 8
-
-    if volatility > 80:
+    if volatility > 85:
         buy_score -= 5
         sell_score -= 5
 
@@ -325,7 +303,7 @@ def analyze_real_market(pair):
         direction = "SELL"
         confidence = sell_score
 
-    confidence = int(max(60, min(94, confidence)))
+    confidence = int(max(62, min(94, confidence)))
     reversal = 100 - confidence
 
     return {
@@ -338,8 +316,7 @@ def analyze_real_market(pair):
 
 def register_signal(pair, analysis, expiry):
     signal_id = str(int(time.time() * 1000))
-
-    signal_data = {
+    item = {
         "id": signal_id,
         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "market": "FOREX_REAL",
@@ -354,9 +331,8 @@ def register_signal(pair, analysis, expiry):
     }
 
     learning_data["total_signals"] = learning_data.get("total_signals", 0) + 1
-    learning_data["history"].append(signal_data)
+    learning_data["history"].append(item)
     save_learning_data(learning_data)
-
     return signal_id
 
 
@@ -364,9 +340,7 @@ def generate_signal(pair, expiry):
     analysis = analyze_real_market(pair)
 
     if analysis["direction"] == "NO_DATA":
-        send_message(
-            f"⚠️ <b>{pair_name(pair)}</b>\n\nNo pude leer datos del mercado ahora.\nPrueba nuevamente en unos segundos."
-        )
+        send_message(f"⚠️ <b>{pair_name(pair)}</b>\n\nNo pude leer datos del mercado ahora.")
         return
 
     direction = analysis["direction"]
@@ -375,7 +349,6 @@ def generate_signal(pair, expiry):
     volatility = analysis["volatility"]
 
     signal_text = "🟢 COMPRA ARRIBA" if direction == "BUY" else "🔴 VENTA ABAJO"
-
     signal_id = register_signal(pair, analysis, expiry)
 
     text = f"""🖤💛 <b>El_Caballo_AI_Pro</b>
@@ -402,18 +375,15 @@ def update_result(signal_id, result):
             found = True
 
             if result == "WIN":
-                learning_data["wins"] = learning_data.get("wins", 0) + 1
-            elif result == "LOSS":
-                learning_data["losses"] = learning_data.get("losses", 0) + 1
+                learning_data["wins"] += 1
+            else:
+                learning_data["losses"] += 1
 
             pair = item.get("pair", "UNKNOWN")
             expiry = str(item.get("expiry", "0"))
 
-            if pair not in learning_data["pairs"]:
-                learning_data["pairs"][pair] = {"wins": 0, "losses": 0}
-
-            if expiry not in learning_data["expiries"]:
-                learning_data["expiries"][expiry] = {"wins": 0, "losses": 0}
+            learning_data["pairs"].setdefault(pair, {"wins": 0, "losses": 0})
+            learning_data["expiries"].setdefault(expiry, {"wins": 0, "losses": 0})
 
             if result == "WIN":
                 learning_data["pairs"][pair]["wins"] += 1
@@ -431,7 +401,6 @@ def update_result(signal_id, result):
 def group_stats(title, group):
     text = f"\n<b>{title}</b>\n"
     data = learning_data.get(group, {})
-
     if not data:
         return text + "Sin datos todavía.\n"
 
@@ -441,7 +410,6 @@ def group_stats(title, group):
         total = wins + losses
         rate = round((wins / total) * 100, 2) if total > 0 else 0
         text += f"{name}: {wins}W / {losses}L — {rate}%\n"
-
     return text
 
 
@@ -450,19 +418,17 @@ def stats_text():
     wins = learning_data.get("wins", 0)
     losses = learning_data.get("losses", 0)
     closed = wins + losses
-    win_rate = round((wins / closed) * 100, 2) if closed > 0 else 0
+    rate = round((wins / closed) * 100, 2) if closed > 0 else 0
 
     text = f"""📊 <b>Estadísticas El_Caballo_AI_Pro</b>
 
 ⭐ Señales totales: <b>{total}</b>
 ✅ WIN: <b>{wins}</b>
 ❌ LOSS: <b>{losses}</b>
-🎯 Win rate: <b>{win_rate}%</b>
+🎯 Win rate: <b>{rate}%</b>
 """
-
     text += group_stats("📌 Pares", "pairs")
     text += group_stats("⏱ Expiraciones", "expiries")
-
     return text
 
 
@@ -475,52 +441,26 @@ def handle_callback(callback):
     answer_callback(callback_id)
 
     if data == "menu_forex":
-        edit_message(
-            chat_id,
-            message_id,
-            "📈 <b>Selecciona un par Forex mercado real:</b>",
-            forex_menu()
-        )
+        edit_message(chat_id, message_id, "📈 <b>Selecciona un par Forex mercado real:</b>", forex_menu())
 
     elif data == "menu_otc":
-        edit_message(
-            chat_id,
-            message_id,
-            "🌙 <b>OTC todavía no está conectado a datos reales.</b>\n\nPrimero dejamos Forex real funcionando perfecto.",
-            main_menu()
-        )
+        edit_message(chat_id, message_id, "🌙 <b>OTC lo conectamos después de dejar Forex probado.</b>", main_menu())
 
     elif data == "stats":
         edit_message(chat_id, message_id, stats_text(), main_menu())
 
     elif data == "back_main":
-        edit_message(
-            chat_id,
-            message_id,
-            "🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:",
-            main_menu()
-        )
+        edit_message(chat_id, message_id, "🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:", main_menu())
 
     elif data.startswith("pair_"):
         pair = data.replace("pair_", "")
-        edit_message(
-            chat_id,
-            message_id,
-            f"⏱ <b>Selecciona expiración para {pair_name(pair)}:</b>",
-            expiry_menu(pair)
-        )
+        edit_message(chat_id, message_id, f"⏱ <b>Selecciona expiración para {pair_name(pair)}:</b>", expiry_menu(pair))
 
     elif data.startswith("expiry_"):
         parts = data.split("_")
         expiry = parts[-1]
         pair = "_".join(parts[1:-1])
-
-        edit_message(
-            chat_id,
-            message_id,
-            f"🔎 Analizando <b>{pair_name(pair)}</b>..."
-        )
-
+        edit_message(chat_id, message_id, f"🔎 Analizando <b>{pair_name(pair)}</b>...")
         generate_signal(pair, expiry)
 
     elif data.startswith("win_"):
@@ -537,20 +477,13 @@ def handle_callback(callback):
 
 
 def handle_message(message):
-    text = message.get("text", "")
-
-    if text == "/start":
-        send_message(
-            "🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:",
-            main_menu()
-        )
+    if message.get("text", "") == "/start":
+        send_message("🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:", main_menu())
 
 
 def get_updates():
     global last_update_id
-
     params = {"timeout": 30}
-
     if last_update_id is not None:
         params["offset"] = last_update_id + 1
 
@@ -563,7 +496,6 @@ def get_updates():
 
             if "callback_query" in update:
                 handle_callback(update["callback_query"])
-
             elif "message" in update:
                 handle_message(update["message"])
 
@@ -573,8 +505,7 @@ def get_updates():
 
 
 def main():
-    print("El_Caballo_AI_Pro Forex Real activo")
-
+    print("El_Caballo_AI_Pro V7 Profesional activo")
     while True:
         get_updates()
         time.sleep(2)
