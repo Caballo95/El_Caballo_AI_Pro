@@ -19,11 +19,9 @@ FOREX_PAIRS = {
     "AUD_CAD": {"name": "AUD/CAD", "symbol": "AUDCAD=X"},
     "AUD_CHF": {"name": "AUD/CHF", "symbol": "AUDCHF=X"},
     "AUD_NZD": {"name": "AUD/NZD", "symbol": "AUDNZD=X"},
-
     "GBP_USD": {"name": "GBP/USD", "symbol": "GBPUSD=X"},
     "GBP_CAD": {"name": "GBP/CAD", "symbol": "GBPCAD=X"},
     "GBP_JPY": {"name": "GBP/JPY", "symbol": "GBPJPY=X"}
-}
 }
 
 
