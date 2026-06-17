@@ -28,11 +28,13 @@ PAIRS = {
 DEFAULT_DATA = {
     "selected_pair": None,
     "selected_pair_name": None,
+    "selected_expiry": None,
     "signals": 0,
     "wins": 0,
     "losses": 0,
     "history": []
 }
+
 
 def load_data():
     if DATA_FILE.exists():
@@ -45,10 +47,13 @@ def load_data():
             return DEFAULT_DATA.copy()
     return DEFAULT_DATA.copy()
 
+
 def save_data(data):
     DATA_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
+
 data = load_data()
+
 
 def send_message(text, keyboard=None):
     payload = {
@@ -58,10 +63,12 @@ def send_message(text, keyboard=None):
     }
     if keyboard:
         payload["reply_markup"] = keyboard
+
     try:
         requests.post(f"{API}/sendMessage", json=payload, timeout=10)
     except Exception as e:
         print("SEND ERROR:", e)
+
 
 def edit_message(chat_id, message_id, text, keyboard=None):
     payload = {
@@ -72,16 +79,23 @@ def edit_message(chat_id, message_id, text, keyboard=None):
     }
     if keyboard:
         payload["reply_markup"] = keyboard
+
     try:
         requests.post(f"{API}/editMessageText", json=payload, timeout=10)
     except Exception as e:
         print("EDIT ERROR:", e)
 
+
 def answer_callback(callback_id):
     try:
-        requests.post(f"{API}/answerCallbackQuery", json={"callback_query_id": callback_id}, timeout=10)
+        requests.post(
+            f"{API}/answerCallbackQuery",
+            json={"callback_query_id": callback_id},
+            timeout=10
+        )
     except Exception:
         pass
+
 
 def main_menu():
     return {
@@ -91,12 +105,25 @@ def main_menu():
         ]
     }
 
+
 def forex_menu():
     rows = []
     for code, name in PAIRS.items():
         rows.append([{"text": name, "callback_data": f"pair_{code}"}])
     rows.append([{"text": "⬅️ Volver", "callback_data": "back_main"}])
     return {"inline_keyboard": rows}
+
+
+def expiry_menu(pair_code):
+    return {
+        "inline_keyboard": [
+            [{"text": "1 minuto", "callback_data": f"expiry_{pair_code}_1"}],
+            [{"text": "3 minutos", "callback_data": f"expiry_{pair_code}_3"}],
+            [{"text": "5 minutos", "callback_data": f"expiry_{pair_code}_5"}],
+            [{"text": "⬅️ Volver", "callback_data": "menu_forex"}]
+        ]
+    }
+
 
 def result_keyboard(signal_id):
     return {
@@ -109,6 +136,7 @@ def result_keyboard(signal_id):
         ]
     }
 
+
 def stats_text():
     total = data.get("signals", 0)
     wins = data.get("wins", 0)
@@ -116,7 +144,7 @@ def stats_text():
     closed = wins + losses
     rate = round((wins / closed) * 100, 2) if closed > 0 else 0
 
-    text = f"""📊 <b>Estadísticas El_Caballo_AI_Pro</b>
+    return f"""📊 <b>Estadísticas El_Caballo_AI_Pro</b>
 
 ⭐ Señales totales: <b>{total}</b>
 ✅ WIN: <b>{wins}</b>
@@ -125,8 +153,11 @@ def stats_text():
 
 📌 Par activo:
 <b>{data.get("selected_pair_name") or "Ninguno seleccionado"}</b>
+
+⏱ Expiración activa:
+<b>{data.get("selected_expiry") or "No seleccionada"} minuto(s)</b>
 """
-    return text
+
 
 def normalize_pair(raw):
     if not raw:
@@ -140,30 +171,29 @@ def normalize_pair(raw):
     p = p.replace("OANDA:", "")
     p = p.replace("FOREXCOM:", "")
     p = p.replace("CAPITALCOM:", "")
-    p = p.replace("EURUSD", "EURUSD")
     p = p.strip()
 
     for code in PAIRS:
         if code in p:
             return code
+
     return None
 
-def parse_tradingview_payload(payload):
-    """
-    Acepta señales desde TradingView en texto normal o JSON.
-    """
 
+def parse_tradingview_payload(payload):
     if isinstance(payload, dict):
         pair = payload.get("pair") or payload.get("symbol") or payload.get("ticker")
         direction = payload.get("direction") or payload.get("signal") or payload.get("side")
-        expiry = payload.get("expiry") or payload.get("expiracion") or "1"
         probability = payload.get("probability") or payload.get("probabilidad") or payload.get("confidence")
         reversal = payload.get("reversal") or payload.get("reversion")
         volatility = payload.get("volatility") or payload.get("volatilidad")
     else:
         text = str(payload)
 
-        pair_match = re.search(r"(EURUSD|AUDUSD|AUDCAD|AUDCHF|AUDNZD|GBPUSD|GBPCAD|GBPJPY|EUR/USD|AUD/USD|AUD/CAD|AUD/CHF|AUD/NZD|GBP/USD|GBP/CAD|GBP/JPY)", text.upper())
+        pair_match = re.search(
+            r"(EURUSD|AUDUSD|AUDCAD|AUDCHF|AUDNZD|GBPUSD|GBPCAD|GBPJPY|EUR/USD|AUD/USD|AUD/CAD|AUD/CHF|AUD/NZD|GBP/USD|GBP/CAD|GBP/JPY)",
+            text.upper()
+        )
         pair = pair_match.group(1) if pair_match else None
 
         if "COMPRA" in text.upper() or "BUY" in text.upper() or "CALL" in text.upper():
@@ -173,12 +203,10 @@ def parse_tradingview_payload(payload):
         else:
             direction = None
 
-        expiry_match = re.search(r"Expiraci[oó]n:\s*([0-9]+)", text, re.IGNORECASE)
         probability_match = re.search(r"Probabilidad:\s*([0-9]+)", text, re.IGNORECASE)
         reversal_match = re.search(r"Reversi[oó]n:\s*([0-9]+)", text, re.IGNORECASE)
         volatility_match = re.search(r"Volatilidad:\s*([0-9]+)", text, re.IGNORECASE)
 
-        expiry = expiry_match.group(1) if expiry_match else "1"
         probability = probability_match.group(1) if probability_match else "N/A"
         reversal = reversal_match.group(1) if reversal_match else "N/A"
         volatility = volatility_match.group(1) if volatility_match else "N/A"
@@ -204,11 +232,12 @@ def parse_tradingview_payload(payload):
         "pair_name": PAIRS[pair_code],
         "direction": direction_clean,
         "title": title,
-        "expiry": str(expiry),
+        "expiry": str(data.get("selected_expiry") or "1"),
         "probability": str(probability),
         "reversal": str(reversal),
         "volatility": str(volatility)
     }
+
 
 def register_signal(signal):
     signal_id = str(int(time.time() * 1000))
@@ -229,7 +258,9 @@ def register_signal(signal):
     data["signals"] = data.get("signals", 0) + 1
     data.setdefault("history", []).append(item)
     save_data(data)
+
     return signal_id
+
 
 def send_signal(signal):
     signal_id = register_signal(signal)
@@ -248,6 +279,7 @@ def send_signal(signal):
 """
 
     send_message(text, result_keyboard(signal_id))
+
 
 def update_result(signal_id, result):
     found = False
@@ -269,6 +301,7 @@ def update_result(signal_id, result):
 
     return found
 
+
 def handle_callback(callback):
     callback_id = callback["id"]
     chat_id = callback["message"]["chat"]["id"]
@@ -278,13 +311,24 @@ def handle_callback(callback):
     answer_callback(callback_id)
 
     if action == "menu_forex":
-        edit_message(chat_id, message_id, "📈 <b>Selecciona el par Forex mercado real:</b>", forex_menu())
+        edit_message(
+            chat_id,
+            message_id,
+            "📈 <b>Selecciona el par Forex mercado real:</b>",
+            forex_menu()
+        )
 
     elif action == "back_main":
-        edit_message(chat_id, message_id, "🖤💛 <b>El_Caballo_AI_Pro V8</b>\n\nSelecciona una opción:", main_menu())
+        edit_message(
+            chat_id,
+            message_id,
+            "🖤💛 <b>El_Caballo_AI_Pro V8</b>\n\nSelecciona una opción:",
+            main_menu()
+        )
 
     elif action.startswith("pair_"):
         pair_code = action.replace("pair_", "")
+
         if pair_code in PAIRS:
             data["selected_pair"] = pair_code
             data["selected_pair_name"] = PAIRS[pair_code]
@@ -293,7 +337,25 @@ def handle_callback(callback):
             edit_message(
                 chat_id,
                 message_id,
-                f"✅ Par activo seleccionado:\n\n📊 <b>{PAIRS[pair_code]}</b>\n\nAhora TradingView analizará el mercado real y solo recibirás señales de este par.",
+                f"⏱ <b>Selecciona expiración para {PAIRS[pair_code]}:</b>",
+                expiry_menu(pair_code)
+            )
+
+    elif action.startswith("expiry_"):
+        parts = action.split("_")
+        expiry = parts[-1]
+        pair_code = "_".join(parts[1:-1])
+
+        if pair_code in PAIRS:
+            data["selected_pair"] = pair_code
+            data["selected_pair_name"] = PAIRS[pair_code]
+            data["selected_expiry"] = expiry
+            save_data(data)
+
+            edit_message(
+                chat_id,
+                message_id,
+                f"🔎 Analizando <b>{PAIRS[pair_code]}</b>...\n⏱ Expiración seleccionada: <b>{expiry} minuto(s)</b>",
                 main_menu()
             )
 
@@ -312,11 +374,16 @@ def handle_callback(callback):
         msg = "❌ Resultado guardado como LOSS." if ok else "⚠️ Esta señal ya fue marcada."
         edit_message(chat_id, message_id, msg + "\n\n" + stats_text(), main_menu())
 
+
 def handle_message(message):
     text = message.get("text", "")
 
     if text == "/start":
-        send_message("🖤💛 <b>El_Caballo_AI_Pro V8</b>\n\nSelecciona una opción:", main_menu())
+        send_message(
+            "🖤💛 <b>El_Caballo_AI_Pro V8</b>\n\nSelecciona una opción:",
+            main_menu()
+        )
+
 
 def telegram_loop():
     global last_update_id
@@ -324,6 +391,7 @@ def telegram_loop():
     while True:
         try:
             params = {"timeout": 30}
+
             if last_update_id is not None:
                 params["offset"] = last_update_id + 1
 
@@ -343,11 +411,14 @@ def telegram_loop():
             print("TELEGRAM LOOP ERROR:", e)
             time.sleep(5)
 
+
 app = Flask(__name__)
+
 
 @app.route("/", methods=["GET"])
 def home():
     return "El_Caballo_AI_Pro V8 activo"
+
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -382,9 +453,11 @@ def webhook():
         print("WEBHOOK ERROR:", e)
         return {"ok": False, "error": str(e)}, 500
 
+
 def start_bot():
     print("El_Caballo_AI_Pro V8 receptor TradingView activo")
     threading.Thread(target=telegram_loop, daemon=True).start()
+
 
 if __name__ == "__main__":
     start_bot()
