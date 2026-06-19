@@ -29,10 +29,14 @@ DEFAULT_DATA = {
     "selected_pair": None,
     "selected_pair_name": None,
     "selected_expiry": None,
+    "pending_request": False,
+    "requested_at": None,
     "signals": 0,
     "wins": 0,
     "losses": 0,
-    "history": []
+    "history": [],
+    "latest_signals": {},
+    "sent_ids": []
 }
 
 
@@ -56,14 +60,9 @@ data = load_data()
 
 
 def send_message(text, keyboard=None):
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML"
-    }
+    payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
     if keyboard:
         payload["reply_markup"] = keyboard
-
     try:
         requests.post(f"{API}/sendMessage", json=payload, timeout=10)
     except Exception as e:
@@ -71,15 +70,9 @@ def send_message(text, keyboard=None):
 
 
 def edit_message(chat_id, message_id, text, keyboard=None):
-    payload = {
-        "chat_id": chat_id,
-        "message_id": message_id,
-        "text": text,
-        "parse_mode": "HTML"
-    }
+    payload = {"chat_id": chat_id, "message_id": message_id, "text": text, "parse_mode": "HTML"}
     if keyboard:
         payload["reply_markup"] = keyboard
-
     try:
         requests.post(f"{API}/editMessageText", json=payload, timeout=10)
     except Exception as e:
@@ -88,11 +81,7 @@ def edit_message(chat_id, message_id, text, keyboard=None):
 
 def answer_callback(callback_id):
     try:
-        requests.post(
-            f"{API}/answerCallbackQuery",
-            json={"callback_query_id": callback_id},
-            timeout=10
-        )
+        requests.post(f"{API}/answerCallbackQuery", json={"callback_query_id": callback_id}, timeout=10)
     except Exception:
         pass
 
@@ -138,9 +127,10 @@ def result_keyboard(signal_id):
 
 
 def stats_text():
-    total = data.get("signals", 0)
-    wins = data.get("wins", 0)
-    losses = data.get("losses", 0)
+    d = load_data()
+    total = d.get("signals", 0)
+    wins = d.get("wins", 0)
+    losses = d.get("losses", 0)
     closed = wins + losses
     rate = round((wins / closed) * 100, 2) if closed > 0 else 0
 
@@ -152,32 +142,60 @@ def stats_text():
 🎯 Win rate: <b>{rate}%</b>
 
 📌 Par activo:
-<b>{data.get("selected_pair_name") or "Ninguno seleccionado"}</b>
+<b>{d.get("selected_pair_name") or "Ninguno seleccionado"}</b>
 
 ⏱ Expiración activa:
-<b>{data.get("selected_expiry") or "No seleccionada"} minuto(s)</b>
+<b>{d.get("selected_expiry") or "No seleccionada"} minuto(s)</b>
 """
 
 
 def normalize_pair(raw):
     if not raw:
         return None
-
     p = str(raw).upper()
-    p = p.replace("/", "")
-    p = p.replace("-", "")
-    p = p.replace("_", "")
-    p = p.replace("FXCM:", "")
-    p = p.replace("OANDA:", "")
-    p = p.replace("FOREXCOM:", "")
-    p = p.replace("CAPITALCOM:", "")
-    p = p.strip()
-
+    for s in ["FXCM:", "OANDA:", "FOREXCOM:", "CAPITALCOM:", "/", "-", "_", " "]:
+        p = p.replace(s, "")
     for code in PAIRS:
         if code in p:
             return code
-
     return None
+
+
+def safe_int(value, default=None):
+    try:
+        if value is None:
+            return default
+        return int(float(str(value).replace("%", "").strip()))
+    except Exception:
+        return default
+
+
+def classify_signal(direction, probability, reversal):
+    prob = safe_int(probability)
+    rev = safe_int(reversal)
+
+    if direction == "NEUTRAL":
+        return "NEUTRAL", "🟡 MERCADO INDECISO", "⚠️ Recomendación: esperar confirmación"
+
+    if prob is None or rev is None:
+        if direction == "BUY":
+            return "TRADE", "🟢 COMPRA ARRIBA", "✅ Recomendación: ENTRAR AHORA"
+        if direction == "SELL":
+            return "TRADE", "🔴 VENTA ABAJO", "✅ Recomendación: ENTRAR AHORA"
+
+    if prob < 55 or rev > 45:
+        return "NEUTRAL", "🟡 MERCADO INDECISO", "⚠️ Recomendación: NO operar / esperar confirmación"
+
+    if 55 <= prob < 75 or 31 <= rev <= 45:
+        return "NEUTRAL", "🟡 MERCADO INDECISO", "⚠️ Señal débil: operar con mucho cuidado"
+
+    if direction == "BUY":
+        return "TRADE", "🟢 COMPRA ARRIBA", "✅ Recomendación: ENTRAR AHORA"
+
+    if direction == "SELL":
+        return "TRADE", "🔴 VENTA ABAJO", "✅ Recomendación: ENTRAR AHORA"
+
+    return "NEUTRAL", "🟡 MERCADO INDECISO", "⚠️ Recomendación: esperar confirmación"
 
 
 def parse_tradingview_payload(payload):
@@ -189,16 +207,18 @@ def parse_tradingview_payload(payload):
         volatility = payload.get("volatility") or payload.get("volatilidad")
     else:
         text = str(payload)
-
         pair_match = re.search(
             r"(EURUSD|AUDUSD|AUDCAD|AUDCHF|AUDNZD|GBPUSD|GBPCAD|GBPJPY|EUR/USD|AUD/USD|AUD/CAD|AUD/CHF|AUD/NZD|GBP/USD|GBP/CAD|GBP/JPY)",
             text.upper()
         )
         pair = pair_match.group(1) if pair_match else None
 
-        if "COMPRA" in text.upper() or "BUY" in text.upper() or "CALL" in text.upper():
+        upper = text.upper()
+        if "INDECISO" in upper or "NEUTRAL" in upper:
+            direction = "NEUTRAL"
+        elif "COMPRA" in upper or "BUY" in upper or "CALL" in upper:
             direction = "BUY"
-        elif "VENTA" in text.upper() or "SELL" in text.upper() or "PUT" in text.upper():
+        elif "VENTA" in upper or "SELL" in upper or "PUT" in upper:
             direction = "SELL"
         else:
             direction = None
@@ -207,12 +227,11 @@ def parse_tradingview_payload(payload):
         reversal_match = re.search(r"Reversi[oó]n:\s*([0-9]+)", text, re.IGNORECASE)
         volatility_match = re.search(r"Volatilidad:\s*([0-9]+)", text, re.IGNORECASE)
 
-        probability = probability_match.group(1) if probability_match else "N/A"
-        reversal = reversal_match.group(1) if reversal_match else "N/A"
-        volatility = volatility_match.group(1) if volatility_match else "N/A"
+        probability = probability_match.group(1) if probability_match else None
+        reversal = reversal_match.group(1) if reversal_match else None
+        volatility = volatility_match.group(1) if volatility_match else None
 
     pair_code = normalize_pair(pair)
-
     if not pair_code or not direction:
         return None
 
@@ -220,26 +239,50 @@ def parse_tradingview_payload(payload):
 
     if direction in ["BUY", "CALL", "COMPRA", "COMPRA ARRIBA"]:
         direction_clean = "BUY"
-        title = "🟢 COMPRA ARRIBA"
     elif direction in ["SELL", "PUT", "VENTA", "VENTA ABAJO"]:
         direction_clean = "SELL"
-        title = "🔴 VENTA ABAJO"
+    elif direction in ["NEUTRAL", "INDECISO", "MERCADO INDECISO"]:
+        direction_clean = "NEUTRAL"
     else:
         return None
+
+    d = load_data()
+    expiry = str(d.get("selected_expiry") or "1")
+
+    signal_type, title, recommendation = classify_signal(direction_clean, probability, reversal)
 
     return {
         "pair_code": pair_code,
         "pair_name": PAIRS[pair_code],
         "direction": direction_clean,
+        "signal_type": signal_type,
         "title": title,
-        "expiry": str(data.get("selected_expiry") or "1"),
-        "probability": str(probability),
-        "reversal": str(reversal),
-        "volatility": str(volatility)
+        "expiry": expiry,
+        "probability": str(probability if probability is not None else "N/A"),
+        "reversal": str(reversal if reversal is not None else "N/A"),
+        "volatility": str(volatility if volatility is not None else "N/A"),
+        "recommendation": recommendation,
+        "created_at": int(time.time())
     }
 
 
+def build_signal_text(signal):
+    return f"""🖤💛 <b>El_Caballo_AI_Pro V8</b>
+
+{signal["title"]}
+📊 <b>{signal["pair_name"]}</b>
+
+⏱ Expiración: <b>{signal["expiry"]} minuto(s)</b>
+🎯 Probabilidad: <b>{signal["probability"]}%</b>
+🔄 Reversión: <b>{signal["reversal"]}%</b>
+📈 Volatilidad: <b>{signal["volatility"]}/100</b>
+
+{signal["recommendation"]}
+"""
+
+
 def register_signal(signal):
+    d = load_data()
     signal_id = str(int(time.time() * 1000))
 
     item = {
@@ -255,54 +298,51 @@ def register_signal(signal):
         "result": "PENDING"
     }
 
-    data["signals"] = data.get("signals", 0) + 1
-    data.setdefault("history", []).append(item)
-    save_data(data)
-
+    d["signals"] = d.get("signals", 0) + 1
+    d.setdefault("history", []).append(item)
+    save_data(d)
     return signal_id
 
 
 def send_signal(signal):
-    signal_id = register_signal(signal)
+    text = build_signal_text(signal)
 
-    text = f"""🖤💛 <b>El_Caballo_AI_Pro V8</b>
-
-{signal["title"]}
-📊 <b>{signal["pair_name"]}</b>
-
-⏱ Expiración: <b>{signal["expiry"]} minuto(s)</b>
-🎯 Probabilidad: <b>{signal["probability"]}%</b>
-🔄 Reversión: <b>{signal["reversal"]}%</b>
-📈 Volatilidad: <b>{signal["volatility"]}/100</b>
-
-🕐 Entrada: <b>AHORA</b>
-"""
-
-    send_message(text, result_keyboard(signal_id))
+    if signal["signal_type"] == "TRADE":
+        signal_id = register_signal(signal)
+        send_message(text, result_keyboard(signal_id))
+    else:
+        send_message(text, main_menu())
 
 
 def update_result(signal_id, result):
+    d = load_data()
     found = False
 
-    for item in data.get("history", []):
-        if item.get("id") == signal_id and item.get("result") == "PENDING":
+    for item in d.get("history", []):
+        if item.get("id") == signal_id:
+            if item.get("result") != "PENDING":
+                save_data(d)
+                return False
+
             item["result"] = result
             found = True
 
             if result == "WIN":
-                data["wins"] = data.get("wins", 0) + 1
+                d["wins"] = d.get("wins", 0) + 1
             else:
-                data["losses"] = data.get("losses", 0) + 1
-
+                d["losses"] = d.get("losses", 0) + 1
             break
 
     if found:
-        save_data(data)
+        save_data(d)
 
     return found
 
 
 def handle_callback(callback):
+    global data
+    data = load_data()
+
     callback_id = callback["id"]
     chat_id = callback["message"]["chat"]["id"]
     message_id = callback["message"]["message_id"]
@@ -311,24 +351,13 @@ def handle_callback(callback):
     answer_callback(callback_id)
 
     if action == "menu_forex":
-        edit_message(
-            chat_id,
-            message_id,
-            "📈 <b>Selecciona el par Forex mercado real:</b>",
-            forex_menu()
-        )
+        edit_message(chat_id, message_id, "📈 <b>Selecciona el par Forex mercado real:</b>", forex_menu())
 
     elif action == "back_main":
-        edit_message(
-            chat_id,
-            message_id,
-            "🖤💛 <b>El_Caballo_AI_Pro V8</b>\n\nSelecciona una opción:",
-            main_menu()
-        )
+        edit_message(chat_id, message_id, "🖤💛 <b>El_Caballo_AI_Pro V8</b>\n\nSelecciona una opción:", main_menu())
 
     elif action.startswith("pair_"):
         pair_code = action.replace("pair_", "")
-
         if pair_code in PAIRS:
             data["selected_pair"] = pair_code
             data["selected_pair_name"] = PAIRS[pair_code]
@@ -350,14 +379,22 @@ def handle_callback(callback):
             data["selected_pair"] = pair_code
             data["selected_pair_name"] = PAIRS[pair_code]
             data["selected_expiry"] = expiry
+            data["pending_request"] = True
+            data["requested_at"] = int(time.time())
             save_data(data)
 
             edit_message(
                 chat_id,
                 message_id,
-                f"🔎 Analizando <b>{PAIRS[pair_code]}</b>...\n⏱ Expiración seleccionada: <b>{expiry} minuto(s)</b>",
-                main_menu()
+                f"🔎 Analizando <b>{PAIRS[pair_code]}</b>...\n⏱ Expiración seleccionada: <b>{expiry} minuto(s)</b>\n\nEsperando lectura real de TradingView.",
+                None
             )
+
+            latest = data.get("latest_signals", {}).get(pair_code)
+            if latest and int(time.time()) - int(latest.get("created_at", 0)) <= 120:
+                data["pending_request"] = False
+                save_data(data)
+                send_signal(latest)
 
     elif action == "stats":
         edit_message(chat_id, message_id, stats_text(), main_menu())
@@ -379,10 +416,7 @@ def handle_message(message):
     text = message.get("text", "")
 
     if text == "/start":
-        send_message(
-            "🖤💛 <b>El_Caballo_AI_Pro V8</b>\n\nSelecciona una opción:",
-            main_menu()
-        )
+        send_message("🖤💛 <b>El_Caballo_AI_Pro V8</b>\n\nSelecciona una opción:", main_menu())
 
 
 def telegram_loop():
@@ -391,7 +425,6 @@ def telegram_loop():
     while True:
         try:
             params = {"timeout": 30}
-
             if last_update_id is not None:
                 params["offset"] = last_update_id + 1
 
@@ -403,7 +436,6 @@ def telegram_loop():
 
                 if "callback_query" in update:
                     handle_callback(update["callback_query"])
-
                 elif "message" in update:
                     handle_message(update["message"])
 
@@ -422,6 +454,8 @@ def home():
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
+    global data
+
     try:
         content_type = request.headers.get("Content-Type", "")
 
@@ -436,17 +470,28 @@ def webhook():
             print("Webhook recibido pero no reconocido:", payload)
             return {"ok": False, "reason": "invalid signal"}, 200
 
-        selected_pair = data.get("selected_pair")
+        data = load_data()
 
-        if not selected_pair:
-            print("Señal ignorada: no hay par seleccionado")
-            return {"ok": True, "ignored": "no selected pair"}, 200
+        data.setdefault("latest_signals", {})
+        data["latest_signals"][signal["pair_code"]] = signal
+        save_data(data)
+
+        selected_pair = data.get("selected_pair")
+        pending = data.get("pending_request")
+
+        if not selected_pair or not pending:
+            print("Señal guardada pero no enviada: no fue solicitada desde Telegram")
+            return {"ok": True, "stored": signal["pair_code"]}, 200
 
         if signal["pair_code"] != selected_pair:
-            print(f"Señal ignorada: {signal['pair_code']} != {selected_pair}")
+            print(f"Señal guardada pero ignorada: {signal['pair_code']} != {selected_pair}")
             return {"ok": True, "ignored": "different pair"}, 200
 
+        data["pending_request"] = False
+        save_data(data)
+
         send_signal(signal)
+
         return {"ok": True, "sent": signal["pair_code"]}, 200
 
     except Exception as e:
