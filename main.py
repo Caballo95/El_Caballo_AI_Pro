@@ -416,14 +416,19 @@ def handle_callback(cb):
     if cmd not in ["reset"] and not valid_session(session):
         edit_message(chat_id, msg_id, "⚠️ Este botón es viejo. Escribe /start para abrir el menú nuevo.")
         return
-
-    remember_message(msg_id)
+    
+    if cmd != "reset":
+        remember_message(msg_id)
 
     if cmd == "reset":
         clean_chat()
         session = new_session()
-        mid = send_message("🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:", main_menu(session))
-        remember_message(mid)
+        edit_message(
+            chat_id,
+            msg_id,
+            "🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:",
+            main_menu(session)
+    )
 
     elif cmd == "menu_forex":
         edit_message(chat_id, msg_id, "📈 <b>Selecciona el par Forex mercado real:</b>", forex_menu(session))
