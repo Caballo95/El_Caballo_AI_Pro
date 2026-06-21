@@ -284,8 +284,6 @@ def macd(closes):
 
 
 def fetch_candles(symbol):
-    if not TWELVE_API_KEY:
-        raise Exception("Falta TWELVE_API_KEY en Railway Variables")
 
     response = requests.get(
         "https://api.twelvedata.com/time_series",
