@@ -541,7 +541,6 @@ def handle_callback(callback):
     session = parts[-1] if len(parts) > 1 else ""
 
     if cmd != "reset" and not valid_session(session):
-        edit_message(chat_id, msg_id, "⚠️ Este botón es viejo. Escribe /start para abrir el menú nuevo.")
         return
 
     if cmd != "reset":
