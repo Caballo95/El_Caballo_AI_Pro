@@ -1,4 +1,4 @@
-import os, time, json, uuid, threading
+import os, time, json, uuid, threading, math
 from pathlib import Path
 from datetime import datetime, timezone
 import requests
@@ -59,8 +59,7 @@ def new_session():
 
 
 def valid_session(session):
-    data = load_data()
-    return session and session == data.get("session")
+    return session and session == load_data().get("session")
 
 
 def remember_message(message_id):
@@ -70,7 +69,7 @@ def remember_message(message_id):
     arr = data.get("messages_to_delete", [])
     if message_id not in arr:
         arr.append(message_id)
-    data["messages_to_delete"] = arr[-25:]
+    data["messages_to_delete"] = arr[-30:]
     save_data(data)
 
 
@@ -78,11 +77,7 @@ def clean_chat():
     data = load_data()
     for mid in data.get("messages_to_delete", []):
         try:
-            requests.post(
-                f"{API}/deleteMessage",
-                json={"chat_id": CHAT_ID, "message_id": mid},
-                timeout=8
-            )
+            requests.post(f"{API}/deleteMessage", json={"chat_id": CHAT_ID, "message_id": mid}, timeout=8)
         except Exception:
             pass
     data["messages_to_delete"] = []
@@ -90,14 +85,9 @@ def clean_chat():
 
 
 def send_message(text, keyboard=None):
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML"
-    }
+    payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
     if keyboard:
         payload["reply_markup"] = keyboard
-
     try:
         r = requests.post(f"{API}/sendMessage", json=payload, timeout=15)
         return r.json().get("result", {}).get("message_id")
@@ -106,15 +96,9 @@ def send_message(text, keyboard=None):
 
 
 def edit_message(chat_id, message_id, text, keyboard=None):
-    payload = {
-        "chat_id": chat_id,
-        "message_id": message_id,
-        "text": text,
-        "parse_mode": "HTML"
-    }
+    payload = {"chat_id": chat_id, "message_id": message_id, "text": text, "parse_mode": "HTML"}
     if keyboard:
         payload["reply_markup"] = keyboard
-
     try:
         requests.post(f"{API}/editMessageText", json=payload, timeout=15)
     except Exception:
@@ -133,55 +117,40 @@ def button(text, data):
 
 
 def main_menu(session):
-    return {
-        "inline_keyboard": [
-            [button("📈 Forex mercado real", f"menu_forex:{session}")],
-            [button("📊 Estadísticas", f"stats:{session}")],
-            [button("🧹 Limpiar chat", f"reset:{session}")]
-        ]
-    }
+    return {"inline_keyboard": [
+        [button("📈 Forex mercado real", f"menu_forex:{session}")],
+        [button("📊 Estadísticas", f"stats:{session}")],
+        [button("🧹 Limpiar chat", f"reset:{session}")]
+    ]}
 
 
 def forex_menu(session):
-    rows = []
-    for code, p in PAIRS.items():
-        rows.append([button(p["name"], f"pair:{code}:{session}")])
+    rows = [[button(p["name"], f"pair:{code}:{session}")] for code, p in PAIRS.items()]
     rows.append([button("⬅️ Volver", f"back:{session}")])
     return {"inline_keyboard": rows}
 
 
 def expiry_menu(pair_code, session):
-    return {
-        "inline_keyboard": [
-            [button("1 minuto", f"expiry:{pair_code}:1:{session}")],
-            [button("2 minutos", f"expiry:{pair_code}:2:{session}")],
-            [button("3 minutos", f"expiry:{pair_code}:3:{session}")],
-            [button("5 minutos", f"expiry:{pair_code}:5:{session}")],
-            [button("⬅️ Volver", f"menu_forex:{session}")]
-        ]
-    }
+    return {"inline_keyboard": [
+        [button("1 minuto", f"expiry:{pair_code}:1:{session}")],
+        [button("2 minutos", f"expiry:{pair_code}:2:{session}")],
+        [button("3 minutos", f"expiry:{pair_code}:3:{session}")],
+        [button("5 minutos", f"expiry:{pair_code}:5:{session}")],
+        [button("⬅️ Volver", f"menu_forex:{session}")]
+    ]}
 
 
 def result_keyboard(signal_id, session):
-    return {
-        "inline_keyboard": [
-            [
-                button("✅ WIN", f"win:{signal_id}:{session}"),
-                button("❌ LOSS", f"loss:{signal_id}:{session}")
-            ],
-            [button("📊 Estadísticas", f"stats:{session}")],
-            [button("🧹 Limpiar chat", f"reset:{session}")]
-        ]
-    }
-
-
-def sma(values, period):
-    if len(values) < period:
-        return sum(values) / len(values)
-    return sum(values[-period:]) / period
+    return {"inline_keyboard": [
+        [button("✅ WIN", f"win:{signal_id}:{session}"), button("❌ LOSS", f"loss:{signal_id}:{session}")],
+        [button("📊 Estadísticas", f"stats:{session}")],
+        [button("🧹 Limpiar chat", f"reset:{session}")]
+    ]}
 
 
 def ema(values, period):
+    if not values:
+        return 0
     if len(values) < period:
         return sum(values) / len(values)
     k = 2 / (period + 1)
@@ -211,13 +180,8 @@ def atr(highs, lows, closes, period=14):
     if len(closes) < period + 1:
         return 0
     trs = []
-    start = len(closes) - period
-    for i in range(start, len(closes)):
-        tr = max(
-            highs[i] - lows[i],
-            abs(highs[i] - closes[i - 1]),
-            abs(lows[i] - closes[i - 1])
-        )
+    for i in range(len(closes) - period, len(closes)):
+        tr = max(highs[i] - lows[i], abs(highs[i] - closes[i - 1]), abs(lows[i] - closes[i - 1]))
         trs.append(tr)
     return sum(trs) / len(trs)
 
@@ -225,13 +189,11 @@ def atr(highs, lows, closes, period=14):
 def macd(values):
     if len(values) < 35:
         return 0, 0
-    macd_values = []
+    arr = []
     for i in range(35, len(values) + 1):
         part = values[:i]
-        macd_values.append(ema(part, 12) - ema(part, 26))
-    line = macd_values[-1]
-    signal = ema(macd_values, 9)
-    return line, signal
+        arr.append(ema(part, 12) - ema(part, 26))
+    return arr[-1], ema(arr, 9)
 
 
 def parse_dt(dt_text):
@@ -241,18 +203,70 @@ def parse_dt(dt_text):
         return None
 
 
+def pivots(highs, lows, lookback=3):
+    ph, pl = [], []
+    for i in range(lookback, len(highs) - lookback):
+        if highs[i] == max(highs[i-lookback:i+lookback+1]):
+            ph.append((i, highs[i]))
+        if lows[i] == min(lows[i-lookback:i+lookback+1]):
+            pl.append((i, lows[i]))
+    return ph[-8:], pl[-8:]
+
+
+def near(a, b, tolerance):
+    return abs(a - b) <= tolerance
+
+
+def detect_patterns(highs, lows, closes, atr_value):
+    pattern = "Ninguno"
+    bias = "NEUTRAL"
+    score = 0
+
+    ph, pl = pivots(highs, lows)
+    tol = atr_value * 1.3 if atr_value else abs(closes[-1]) * 0.0008
+
+    if len(pl) >= 2:
+        l1, l2 = pl[-2], pl[-1]
+        between_high = max(highs[l1[0]:l2[0]+1])
+        if near(l1[1], l2[1], tol) and closes[-1] > between_high - tol:
+            pattern, bias, score = "Double Bottom", "BUY", 14
+
+    if len(ph) >= 2:
+        h1, h2 = ph[-2], ph[-1]
+        between_low = min(lows[h1[0]:h2[0]+1])
+        if near(h1[1], h2[1], tol) and closes[-1] < between_low + tol:
+            pattern, bias, score = "Double Top", "SELL", 14
+
+    if len(ph) >= 3:
+        a, b, c = ph[-3], ph[-2], ph[-1]
+        if b[1] > a[1] and b[1] > c[1] and near(a[1], c[1], tol * 1.5):
+            pattern, bias, score = "Head & Shoulders", "SELL", 18
+
+    if len(pl) >= 3:
+        a, b, c = pl[-3], pl[-2], pl[-1]
+        if b[1] < a[1] and b[1] < c[1] and near(a[1], c[1], tol * 1.5):
+            pattern, bias, score = "Inverted Head & Shoulders", "BUY", 18
+
+    recent = closes[-20:]
+    move = recent[-1] - recent[0]
+    pullback = max(recent[-8:]) - min(recent[-8:])
+
+    if abs(move) > atr_value * 4 and pullback < abs(move) * 0.45:
+        if move > 0:
+            pattern, bias, score = "Bullish Flag/Pennant", "BUY", max(score, 12)
+        else:
+            pattern, bias, score = "Bearish Flag/Pennant", "SELL", max(score, 12)
+
+    return pattern, bias, score
+
+
 def fetch_candles(symbol):
     if not TWELVE_API_KEY:
         raise Exception("API_KEY_NO_CONFIGURADA")
 
     response = requests.get(
         "https://api.twelvedata.com/time_series",
-        params={
-            "symbol": symbol,
-            "interval": "1min",
-            "outputsize": 220,
-            "apikey": TWELVE_API_KEY
-        },
+        params={"symbol": symbol, "interval": "1min", "outputsize": 220, "apikey": TWELVE_API_KEY},
         timeout=20
     ).json()
 
@@ -263,7 +277,6 @@ def fetch_candles(symbol):
         raise Exception("DATOS_NO_DISPONIBLES")
 
     candles = list(reversed(response["values"]))
-
     return {
         "datetime": [c["datetime"] for c in candles],
         "open": [float(c["open"]) for c in candles],
@@ -277,79 +290,67 @@ def analyze_pair(pair_code, expiry):
     pair = PAIRS[pair_code]
     data = fetch_candles(pair["symbol"])
 
-    opens = data["open"]
-    highs = data["high"]
-    lows = data["low"]
-    closes = data["close"]
+    opens, highs, lows, closes = data["open"], data["high"], data["low"], data["close"]
     dts = data["datetime"]
 
-    last_candle_time = parse_dt(dts[-1])
-    candle_age_minutes = 999
-    if last_candle_time:
-        candle_age_minutes = (datetime.now(timezone.utc) - last_candle_time).total_seconds() / 60
+    last_dt = parse_dt(dts[-1])
+    candle_age = 999
+    if last_dt:
+        candle_age = (datetime.now(timezone.utc) - last_dt).total_seconds() / 60
 
-    last = closes[-1]
-    previous = closes[-2]
-    open_last = opens[-1]
+    last, prev, open_last = closes[-1], closes[-2], opens[-1]
 
-    ema9 = ema(closes, 9)
-    ema21 = ema(closes, 21)
-    ema50 = ema(closes, 50)
-    ema200 = ema(closes, 200)
-
+    ema9, ema21, ema50, ema200 = ema(closes, 9), ema(closes, 21), ema(closes, 50), ema(closes, 200)
     rsi_value = rsi(closes)
     macd_line, macd_signal = macd(closes)
     atr_value = atr(highs, lows, closes)
 
-    atr_values = []
+    atr_list = []
     for i in range(40, len(closes)):
         v = atr(highs[:i], lows[:i], closes[:i])
         if v > 0:
-            atr_values.append(v)
-    atr_avg = sum(atr_values[-30:]) / len(atr_values[-30:]) if atr_values else atr_value
-
+            atr_list.append(v)
+    atr_avg = sum(atr_list[-30:]) / len(atr_list[-30:]) if atr_list else atr_value
     volatility = round(max(1, min(100, (atr_value / atr_avg) * 60))) if atr_avg else 1
 
-    support = min(lows[-25:])
-    resistance = max(highs[-25:])
-    candle_range = highs[-1] - lows[-1]
-    body = abs(last - open_last)
+    pattern, pattern_bias, pattern_score = detect_patterns(highs, lows, closes, atr_value)
 
-    buy = 0
-    sell = 0
+    buy, sell = 0, 0
 
-    if last > ema9: buy += 10
-    else: sell += 10
+    if last > ema9: buy += 8
+    else: sell += 8
 
-    if ema9 > ema21: buy += 15
-    else: sell += 15
+    if ema9 > ema21: buy += 12
+    else: sell += 12
 
-    if ema21 > ema50: buy += 15
-    else: sell += 15
+    if ema21 > ema50: buy += 12
+    else: sell += 12
 
     if last > ema200: buy += 10
     else: sell += 10
 
-    if rsi_value > 55: buy += 15
-    elif rsi_value < 45: sell += 15
+    if rsi_value > 57: buy += 14
+    elif rsi_value < 43: sell += 14
+    elif 45 <= rsi_value <= 55:
+        buy -= 5
+        sell -= 5
 
-    if macd_line > macd_signal: buy += 15
-    else: sell += 15
+    if macd_line > macd_signal: buy += 14
+    else: sell += 14
 
-    if last > previous: buy += 10
-    else: sell += 10
+    if last > prev: buy += 8
+    else: sell += 8
 
-    if body > candle_range * 0.45 if candle_range else False:
-        if last > open_last:
-            buy += 10
-        else:
-            sell += 10
+    candle_range = highs[-1] - lows[-1]
+    body = abs(last - open_last)
+    if candle_range and body > candle_range * 0.45:
+        if last > open_last: buy += 8
+        else: sell += 8
 
-    if abs(last - support) < atr_value * 1.2:
-        buy += 8
-
-    if abs(resistance - last) < atr_value * 1.2:
-        sell += 8
+    if pattern_bias == "BUY":
+        buy += pattern_score
+    elif pattern_bias == "SELL":
+        sell += pattern_score
 
     buy = round(max(1, min(100, buy)))
     sell = round(max(1, min(100, sell)))
@@ -358,33 +359,41 @@ def analyze_pair(pair_code, expiry):
     strength = buy if direction == "BUY" else sell
     opposite = sell if direction == "BUY" else buy
     difference = abs(buy - sell)
-
     reversal = round(max(5, min(95, (opposite / max(strength + opposite, 1)) * 100)))
 
-    market_closed = candle_age_minutes > 10 or volatility < 15
+    ema_status = "NEUTRAL"
+    if ema9 > ema21 > ema50 and last > ema200:
+        ema_status = "BUY"
+    elif ema9 < ema21 < ema50 and last < ema200:
+        ema_status = "SELL"
+
+    macd_status = "BUY" if macd_line > macd_signal else "SELL"
+
+    market_closed = candle_age > 10 or volatility < 15
     weak_market = volatility < 25
-    indecisive = strength < 72 or difference < 25 or reversal > 42
+    ema_not_confirmed = ema_status != direction
+    indecisive = strength < 75 or difference < 30 or reversal > 35
 
     if market_closed:
         title = "⏸ MERCADO CERRADO O SIN MOVIMIENTO"
         recommendation = "⛔ Recomendación: NO ENTRAR"
         trade = False
-
     elif weak_market:
         title = "🟡 MERCADO MUY LENTO"
-        recommendation = "⚠️ Mejor esperar más volatilidad."
+        recommendation = "⚠️ Recomendación: ESPERAR MÁS VOLATILIDAD"
         trade = False
-
+    elif ema_not_confirmed:
+        title = "🟡 EMAS SIN CONFIRMACIÓN"
+        recommendation = "⚠️ Recomendación: ESPERAR CONFIRMACIÓN"
+        trade = False
     elif indecisive:
         title = "🟡 MERCADO INDECISO"
-        recommendation = "⚠️ Señal débil. Mejor esperar confirmación."
+        recommendation = "⚠️ Recomendación: NO ENTRAR"
         trade = False
-
     elif direction == "BUY":
         title = "🟢 COMPRA ARRIBA"
         recommendation = "✅ Recomendación: ENTRAR AHORA"
         trade = True
-
     else:
         title = "🔴 VENTA ABAJO"
         recommendation = "✅ Recomendación: ENTRAR AHORA"
@@ -403,10 +412,11 @@ def analyze_pair(pair_code, expiry):
         "sell": sell,
         "recommendation": recommendation,
         "trade": trade,
-        "candle_age": round(candle_age_minutes, 1),
+        "candle_age": round(candle_age, 1),
         "rsi": round(rsi_value, 1),
-        "macd": "BUY" if macd_line > macd_signal else "SELL",
-        "ema": "BUY" if ema9 > ema21 > ema50 else "SELL" if ema9 < ema21 < ema50 else "NEUTRAL"
+        "macd": macd_status,
+        "ema": ema_status,
+        "pattern": pattern
     }
 
 
@@ -429,6 +439,7 @@ def signal_text(signal):
 📌 RSI: <b>{signal["rsi"]}</b>
 📌 MACD: <b>{signal["macd"]}</b>
 📌 EMAs: <b>{signal["ema"]}</b>
+📌 Patrón: <b>{signal["pattern"]}</b>
 
 {signal["recommendation"]}"""
 
@@ -445,6 +456,7 @@ def register_signal(signal):
         "strength": signal["strength"],
         "reversal": signal["reversal"],
         "volatility": signal["volatility"],
+        "pattern": signal["pattern"],
         "result": "PENDING",
         "time": time.strftime("%Y-%m-%d %H:%M:%S")
     })
@@ -457,7 +469,6 @@ def stats_text():
     data = load_data()
     total = data.get("wins", 0) + data.get("losses", 0)
     rate = round((data.get("wins", 0) / total) * 100, 1) if total else 0
-
     return f"""🖤💛 <b>El_Caballo_AI_Pro</b>
 
 📊 <b>Estadísticas</b>
@@ -470,7 +481,6 @@ def stats_text():
 
 def update_result(signal_id, result):
     data = load_data()
-
     for item in data["history"]:
         if item["id"] == signal_id:
             if item["result"] != "PENDING":
@@ -482,15 +492,13 @@ def update_result(signal_id, result):
                 data["losses"] += 1
             save_data(data)
             return True
-
     return False
 
 
 def safe_error_text(e):
     msg = str(e)
-
     if "API_KEY_INVALIDA" in msg:
-        return "⚠️ TwelveData rechazó la API Key. Revisa que la key esté activa."
+        return "⚠️ TwelveData rechazó la API Key. Revisa que esté activa."
     if "API_KEY_NO_CONFIGURADA" in msg:
         return "⚠️ Falta TWELVE_API_KEY en Railway Variables."
     if "DATOS_NO_DISPONIBLES" in msg:
@@ -502,7 +510,6 @@ def run_analysis(pair_code, expiry, session):
     try:
         time.sleep(2)
         signal = analyze_pair(pair_code, expiry)
-
         clean_chat()
 
         if signal["trade"]:
@@ -522,8 +529,6 @@ def run_analysis(pair_code, expiry, session):
 
 
 def handle_message(message):
-    global last_update_id
-
     text = message.get("text", "")
     chat_id = str(message.get("chat", {}).get("id", ""))
 
@@ -543,7 +548,6 @@ def handle_callback(callback):
     chat_id = callback["message"]["chat"]["id"]
     msg_id = callback["message"]["message_id"]
     parts = callback["data"].split(":")
-
     cmd = parts[0]
     session = parts[-1] if len(parts) > 1 else ""
 
@@ -588,7 +592,6 @@ def handle_callback(callback):
 
 def telegram_loop():
     global last_update_id
-
     data = load_data()
     last_update_id = data.get("last_update_id")
 
@@ -603,7 +606,6 @@ def telegram_loop():
 
             for u in updates:
                 last_update_id = u["update_id"]
-
                 data = load_data()
                 data["last_update_id"] = last_update_id
                 save_data(data)
@@ -632,7 +634,7 @@ def webhook():
 
 
 if __name__ == "__main__":
-    print("El_Caballo_AI_Pro limpio activo")
+    print("El_Caballo_AI_Pro PRO activo")
     threading.Thread(target=telegram_loop, daemon=True).start()
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
