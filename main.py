@@ -1,10 +1,6 @@
-import os
-import time
-import json
-import uuid
-import threading
+import os, time, json, uuid, threading
 from pathlib import Path
-
+from datetime import datetime, timezone
 import requests
 from flask import Flask
 
@@ -15,30 +11,27 @@ TWELVE_API_KEY = os.getenv("TWELVE_API_KEY")
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 DATA_FILE = Path("bot_data.json")
 
-last_update_id = None
-
 PAIRS = {
     "EURUSD": {"name": "EUR/USD", "symbol": "EUR/USD"},
-    "AUDUSD": {"name": "AUD/USD", "symbol": "AUD/USD"},
-    "AUDCAD": {"name": "AUD/CAD", "symbol": "AUD/CAD"},
-    "AUDCHF": {"name": "AUD/CHF", "symbol": "AUD/CHF"},
-    "AUDNZD": {"name": "AUD/NZD", "symbol": "AUD/NZD"},
     "GBPUSD": {"name": "GBP/USD", "symbol": "GBP/USD"},
-    "GBPCAD": {"name": "GBP/CAD", "symbol": "GBP/CAD"},
-    "GBPJPY": {"name": "GBP/JPY", "symbol": "GBP/JPY"},
+    "AUDUSD": {"name": "AUD/USD", "symbol": "AUD/USD"},
+    "USDJPY": {"name": "USD/JPY", "symbol": "USD/JPY"},
+    "USDCAD": {"name": "USD/CAD", "symbol": "USD/CAD"},
+    "USDCHF": {"name": "USD/CHF", "symbol": "USD/CHF"},
+    "NZDUSD": {"name": "NZD/USD", "symbol": "NZD/USD"},
 }
 
 DEFAULT_DATA = {
     "last_update_id": None,
     "session": "",
     "messages_to_delete": [],
-    "selected_pair": None,
-    "selected_expiry": None,
     "signals": 0,
     "wins": 0,
     "losses": 0,
     "history": []
 }
+
+last_update_id = None
 
 
 def load_data():
@@ -66,7 +59,34 @@ def new_session():
 
 
 def valid_session(session):
-    return session == load_data().get("session")
+    data = load_data()
+    return session and session == data.get("session")
+
+
+def remember_message(message_id):
+    if not message_id:
+        return
+    data = load_data()
+    arr = data.get("messages_to_delete", [])
+    if message_id not in arr:
+        arr.append(message_id)
+    data["messages_to_delete"] = arr[-25:]
+    save_data(data)
+
+
+def clean_chat():
+    data = load_data()
+    for mid in data.get("messages_to_delete", []):
+        try:
+            requests.post(
+                f"{API}/deleteMessage",
+                json={"chat_id": CHAT_ID, "message_id": mid},
+                timeout=8
+            )
+        except Exception:
+            pass
+    data["messages_to_delete"] = []
+    save_data(data)
 
 
 def send_message(text, keyboard=None):
@@ -78,9 +98,11 @@ def send_message(text, keyboard=None):
     if keyboard:
         payload["reply_markup"] = keyboard
 
-    r = requests.post(f"{API}/sendMessage", json=payload, timeout=15)
-    result = r.json()
-    return result.get("result", {}).get("message_id")
+    try:
+        r = requests.post(f"{API}/sendMessage", json=payload, timeout=15)
+        return r.json().get("result", {}).get("message_id")
+    except Exception:
+        return None
 
 
 def edit_message(chat_id, message_id, text, keyboard=None):
@@ -99,87 +121,43 @@ def edit_message(chat_id, message_id, text, keyboard=None):
         pass
 
 
-def delete_message(chat_id, message_id):
-    try:
-        requests.post(
-            f"{API}/deleteMessage",
-            json={"chat_id": chat_id, "message_id": message_id},
-            timeout=10
-        )
-    except Exception:
-        pass
-
-
-def remember_message(message_id):
-    if not message_id:
-        return
-
-    data = load_data()
-    ids = data.get("messages_to_delete", [])
-
-    if message_id not in ids:
-        ids.append(message_id)
-
-    data["messages_to_delete"] = ids[-30:]
-    save_data(data)
-
-
-def clean_chat():
-    data = load_data()
-    ids = data.get("messages_to_delete", [])
-
-    for mid in ids:
-        delete_message(CHAT_ID, mid)
-
-    data["messages_to_delete"] = []
-    save_data(data)
-
-
 def answer_callback(callback_id):
     try:
-        requests.post(
-            f"{API}/answerCallbackQuery",
-            json={"callback_query_id": callback_id},
-            timeout=10
-        )
+        requests.post(f"{API}/answerCallbackQuery", json={"callback_query_id": callback_id}, timeout=8)
     except Exception:
         pass
+
+
+def button(text, data):
+    return {"text": text, "callback_data": data}
 
 
 def main_menu(session):
     return {
         "inline_keyboard": [
-            [{"text": "📈 Forex mercado real", "callback_data": f"menu_forex:{session}"}],
-            [{"text": "📊 Estadísticas", "callback_data": f"stats:{session}"}],
-            [{"text": "🧹 Limpiar chat", "callback_data": f"reset:{session}"}]
+            [button("📈 Forex mercado real", f"menu_forex:{session}")],
+            [button("📊 Estadísticas", f"stats:{session}")],
+            [button("🧹 Limpiar chat", f"reset:{session}")]
         ]
     }
 
 
 def forex_menu(session):
-    items = list(PAIRS.items())
     rows = []
-
-    for i in range(0, len(items), 2):
-        row = []
-        for code, info in items[i:i + 2]:
-            row.append({
-                "text": info["name"],
-                "callback_data": f"pair:{code}:{session}"
-            })
-        rows.append(row)
-
-    rows.append([{"text": "⬅️ Volver", "callback_data": f"back:{session}"}])
+    for code, p in PAIRS.items():
+        rows.append([button(p["name"], f"pair:{code}:{session}")])
+    rows.append([button("⬅️ Volver", f"back:{session}")])
     return {"inline_keyboard": rows}
 
 
-def expiry_menu(pair, session):
+def expiry_menu(pair_code, session):
     return {
         "inline_keyboard": [
-            [{"text": "1 minuto", "callback_data": f"expiry:{pair}:1:{session}"}],
-            [{"text": "3 minutos", "callback_data": f"expiry:{pair}:3:{session}"}],
-            [{"text": "5 minutos", "callback_data": f"expiry:{pair}:5:{session}"}],
-            [{"text": "⬅️ Volver", "callback_data": f"menu_forex:{session}"}]
+            [button("1 minuto", f"expiry:{pair_code}:1:{session}")],
+            [button("2 minutos", f"expiry:{pair_code}:2:{session}")],
+            [button("3 minutos", f"expiry:{pair_code}:3:{session}")],
+            [button("5 minutos", f"expiry:{pair_code}:5:{session}")],
+            [button("⬅️ Volver", f"menu_forex:{session}")]
         ]
     }
 
@@ -188,102 +166,84 @@ def result_keyboard(signal_id, session):
     return {
         "inline_keyboard": [
             [
-                {"text": "✅ WIN", "callback_data": f"win:{signal_id}:{session}"},
-                {"text": "❌ LOSS", "callback_data": f"loss:{signal_id}:{session}"}
+                button("✅ WIN", f"win:{signal_id}:{session}"),
+                button("❌ LOSS", f"loss:{signal_id}:{session}")
             ],
-            [{"text": "📊 Estadísticas", "callback_data": f"stats:{session}"}],
-            [{"text": "🧹 Limpiar chat", "callback_data": f"reset:{session}"}]
+            [button("📊 Estadísticas", f"stats:{session}")],
+            [button("🧹 Limpiar chat", f"reset:{session}")]
         ]
     }
 
 
-def stats_text():
-    data = load_data()
-    wins = data.get("wins", 0)
-    losses = data.get("losses", 0)
-    total = wins + losses
-    rate = round((wins / total) * 100, 2) if total else 0
-
-    return f"""📊 <b>Estadísticas El_Caballo_AI_Pro</b>
-
-⭐ Señales generadas: <b>{data.get("signals", 0)}</b>
-✅ WIN: <b>{wins}</b>
-❌ LOSS: <b>{losses}</b>
-🎯 Win rate marcado por ti: <b>{rate}%</b>
-"""
+def sma(values, period):
+    if len(values) < period:
+        return sum(values) / len(values)
+    return sum(values[-period:]) / period
 
 
-def ema(values, length):
-    if not values:
-        return 0
-
-    values = values[-length * 4:]
-    k = 2 / (length + 1)
-    result = values[0]
-
-    for value in values[1:]:
-        result = value * k + result * (1 - k)
-
-    return result
+def ema(values, period):
+    if len(values) < period:
+        return sum(values) / len(values)
+    k = 2 / (period + 1)
+    e = values[0]
+    for v in values[1:]:
+        e = v * k + e * (1 - k)
+    return e
 
 
-def rsi(closes, length=14):
-    if len(closes) < length + 1:
+def rsi(values, period=14):
+    if len(values) < period + 1:
         return 50
-
-    gains = []
-    losses = []
-
-    for i in range(1, len(closes)):
-        diff = closes[i] - closes[i - 1]
+    gains, losses = [], []
+    for i in range(-period, 0):
+        diff = values[i] - values[i - 1]
         gains.append(max(diff, 0))
         losses.append(abs(min(diff, 0)))
-
-    avg_gain = sum(gains[-length:]) / length
-    avg_loss = sum(losses[-length:]) / length
-
+    avg_gain = sum(gains) / period
+    avg_loss = sum(losses) / period
     if avg_loss == 0:
         return 100
-
     rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 
 
-def atr(highs, lows, closes, length=14):
-    if len(closes) < length + 1:
+def atr(highs, lows, closes, period=14):
+    if len(closes) < period + 1:
         return 0
-
-    values = []
-
-    for i in range(1, len(closes)):
-        values.append(max(
+    trs = []
+    start = len(closes) - period
+    for i in range(start, len(closes)):
+        tr = max(
             highs[i] - lows[i],
             abs(highs[i] - closes[i - 1]),
             abs(lows[i] - closes[i - 1])
-        ))
+        )
+        trs.append(tr)
+    return sum(trs) / len(trs)
 
-    return sum(values[-length:]) / length
 
-
-def macd(closes):
-    if len(closes) < 35:
+def macd(values):
+    if len(values) < 35:
         return 0, 0
-
     macd_values = []
-
-    for i in range(35, len(closes) + 1):
-        part = closes[:i]
-        fast = ema(part, 12)
-        slow = ema(part, 26)
-        macd_values.append(fast - slow)
-
+    for i in range(35, len(values) + 1):
+        part = values[:i]
+        macd_values.append(ema(part, 12) - ema(part, 26))
     line = macd_values[-1]
     signal = ema(macd_values, 9)
-
     return line, signal
 
 
+def parse_dt(dt_text):
+    try:
+        return datetime.strptime(dt_text, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
 def fetch_candles(symbol):
+    if not TWELVE_API_KEY:
+        raise Exception("API_KEY_NO_CONFIGURADA")
 
     response = requests.get(
         "https://api.twelvedata.com/time_series",
@@ -297,11 +257,15 @@ def fetch_candles(symbol):
     ).json()
 
     if "values" not in response:
-        raise Exception(str(response))
+        msg = str(response)
+        if "apikey" in msg.lower() or "401" in msg:
+            raise Exception("API_KEY_INVALIDA")
+        raise Exception("DATOS_NO_DISPONIBLES")
 
     candles = list(reversed(response["values"]))
 
     return {
+        "datetime": [c["datetime"] for c in candles],
         "open": [float(c["open"]) for c in candles],
         "high": [float(c["high"]) for c in candles],
         "low": [float(c["low"]) for c in candles],
@@ -317,6 +281,12 @@ def analyze_pair(pair_code, expiry):
     highs = data["high"]
     lows = data["low"]
     closes = data["close"]
+    dts = data["datetime"]
+
+    last_candle_time = parse_dt(dts[-1])
+    candle_age_minutes = 999
+    if last_candle_time:
+        candle_age_minutes = (datetime.now(timezone.utc) - last_candle_time).total_seconds() / 60
 
     last = closes[-1]
     previous = closes[-2]
@@ -331,100 +301,90 @@ def analyze_pair(pair_code, expiry):
     macd_line, macd_signal = macd(closes)
     atr_value = atr(highs, lows, closes)
 
+    atr_values = []
+    for i in range(40, len(closes)):
+        v = atr(highs[:i], lows[:i], closes[:i])
+        if v > 0:
+            atr_values.append(v)
+    atr_avg = sum(atr_values[-30:]) / len(atr_values[-30:]) if atr_values else atr_value
+
+    volatility = round(max(1, min(100, (atr_value / atr_avg) * 60))) if atr_avg else 1
+
     support = min(lows[-25:])
     resistance = max(highs[-25:])
-
     candle_range = highs[-1] - lows[-1]
     body = abs(last - open_last)
-    body_ratio = body / candle_range if candle_range else 0
-
-    bull_candle = last > open_last and body_ratio >= 0.45
-    bear_candle = last < open_last and body_ratio >= 0.45
-
-    near_support = last <= support + atr_value * 0.8
-    near_resistance = last >= resistance - atr_value * 0.8
-
-    up_exhausted = closes[-1] > closes[-2] > closes[-3] > closes[-4]
-    down_exhausted = closes[-1] < closes[-2] < closes[-3] < closes[-4]
 
     buy = 0
     sell = 0
 
-    if ema9 > ema21:
-        buy += 18
-    else:
-        sell += 18
+    if last > ema9: buy += 10
+    else: sell += 10
 
-    if ema50 > ema200:
-        buy += 14
-    else:
-        sell += 14
+    if ema9 > ema21: buy += 15
+    else: sell += 15
 
-    if last > ema50:
-        buy += 12
-    else:
-        sell += 12
+    if ema21 > ema50: buy += 15
+    else: sell += 15
 
-    if macd_line > macd_signal:
-        buy += 16
-    else:
-        sell += 16
+    if last > ema200: buy += 10
+    else: sell += 10
 
-    if 42 <= rsi_value <= 68:
-        buy += 14
-    if 32 <= rsi_value <= 58:
-        sell += 14
+    if rsi_value > 55: buy += 15
+    elif rsi_value < 45: sell += 15
 
-    if bull_candle:
-        buy += 14
-    if bear_candle:
-        sell += 14
+    if macd_line > macd_signal: buy += 15
+    else: sell += 15
 
-    if near_support:
+    if last > previous: buy += 10
+    else: sell += 10
+
+    if body > candle_range * 0.45 if candle_range else False:
+        if last > open_last:
+            buy += 10
+        else:
+            sell += 10
+
+    if abs(last - support) < atr_value * 1.2:
         buy += 8
-    if near_resistance:
+
+    if abs(resistance - last) < atr_value * 1.2:
         sell += 8
 
-    if rsi_value > 74:
-        buy -= 14
-        sell += 5
-
-    if rsi_value < 26:
-        sell -= 14
-        buy += 5
-
-    if up_exhausted:
-        buy -= 10
-
-    if down_exhausted:
-        sell -= 10
-
-    buy = max(1, min(100, buy))
-    sell = max(1, min(100, sell))
+    buy = round(max(1, min(100, buy)))
+    sell = round(max(1, min(100, sell)))
 
     direction = "BUY" if buy > sell else "SELL"
     strength = buy if direction == "BUY" else sell
     opposite = sell if direction == "BUY" else buy
     difference = abs(buy - sell)
 
-    atr_avg = sum([
-        atr(highs[:i], lows[:i], closes[:i])
-        for i in range(40, len(closes))
-        if atr(highs[:i], lows[:i], closes[:i]) > 0
-    ][-30:]) or atr_value
+    reversal = round(max(5, min(95, (opposite / max(strength + opposite, 1)) * 100)))
 
-    volatility = round(max(1, min(100, (atr_value / atr_avg) * 60))) if atr_avg else 50
+    market_closed = candle_age_minutes > 10 or volatility < 15
+    weak_market = volatility < 25
+    indecisive = strength < 72 or difference < 25 or reversal > 42
 
-    reversal = round(max(5, min(65, (opposite / max(strength + opposite, 1)) * 100 + (12 if difference < 20 else 0))))
+    if market_closed:
+        title = "⏸ MERCADO CERRADO O SIN MOVIMIENTO"
+        recommendation = "⛔ Recomendación: NO ENTRAR"
+        trade = False
 
-    if strength < 72 or difference < 25 or reversal > 42:
+    elif weak_market:
+        title = "🟡 MERCADO MUY LENTO"
+        recommendation = "⚠️ Mejor esperar más volatilidad."
+        trade = False
+
+    elif indecisive:
         title = "🟡 MERCADO INDECISO"
         recommendation = "⚠️ Señal débil. Mejor esperar confirmación."
         trade = False
+
     elif direction == "BUY":
         title = "🟢 COMPRA ARRIBA"
         recommendation = "✅ Recomendación: ENTRAR AHORA"
         trade = True
+
     else:
         title = "🔴 VENTA ABAJO"
         recommendation = "✅ Recomendación: ENTRAR AHORA"
@@ -439,37 +399,43 @@ def analyze_pair(pair_code, expiry):
         "strength": round(strength),
         "reversal": reversal,
         "volatility": volatility,
-        "buy": round(buy),
-        "sell": round(sell),
+        "buy": buy,
+        "sell": sell,
         "recommendation": recommendation,
-        "trade": trade
+        "trade": trade,
+        "candle_age": round(candle_age_minutes, 1),
+        "rsi": round(rsi_value, 1),
+        "macd": "BUY" if macd_line > macd_signal else "SELL",
+        "ema": "BUY" if ema9 > ema21 > ema50 else "SELL" if ema9 < ema21 < ema50 else "NEUTRAL"
     }
 
 
 def signal_text(signal):
     return f"""🖤💛 <b>El_Caballo_AI_Pro</b>
 
-🔍 Análisis terminado para <b>{signal["pair_name"]}</b>
+🔎 Análisis terminado para <b>{signal["pair_name"]}</b>
 
 {signal["title"]}
 📊 <b>{signal["pair_name"]}</b>
 
 ⏱ Expiración: <b>{signal["expiry"]} minuto(s)</b>
-🎯 Fuerza de señal según mercado: <b>{signal["strength"]}/100</b>
+🎯 Probabilidad/Fuerza: <b>{signal["strength"]}/100</b>
 🔄 Riesgo de reversión: <b>{signal["reversal"]}/100</b>
 📈 Volatilidad: <b>{signal["volatility"]}/100</b>
 
 📊 Fuerza compra: <b>{signal["buy"]}/100</b>
 📊 Fuerza venta: <b>{signal["sell"]}/100</b>
 
-{signal["recommendation"]}
-"""
+📌 RSI: <b>{signal["rsi"]}</b>
+📌 MACD: <b>{signal["macd"]}</b>
+📌 EMAs: <b>{signal["ema"]}</b>
+
+{signal["recommendation"]}"""
 
 
 def register_signal(signal):
     data = load_data()
-    signal_id = str(int(time.time() * 1000))
-
+    signal_id = uuid.uuid4().hex[:8]
     data["signals"] += 1
     data["history"].append({
         "id": signal_id,
@@ -482,15 +448,59 @@ def register_signal(signal):
         "result": "PENDING",
         "time": time.strftime("%Y-%m-%d %H:%M:%S")
     })
-
+    data["history"] = data["history"][-100:]
     save_data(data)
     return signal_id
 
 
+def stats_text():
+    data = load_data()
+    total = data.get("wins", 0) + data.get("losses", 0)
+    rate = round((data.get("wins", 0) / total) * 100, 1) if total else 0
+
+    return f"""🖤💛 <b>El_Caballo_AI_Pro</b>
+
+📊 <b>Estadísticas</b>
+
+✅ Wins: <b>{data.get("wins", 0)}</b>
+❌ Losses: <b>{data.get("losses", 0)}</b>
+🎯 Efectividad: <b>{rate}%</b>
+📌 Señales registradas: <b>{data.get("signals", 0)}</b>"""
+
+
+def update_result(signal_id, result):
+    data = load_data()
+
+    for item in data["history"]:
+        if item["id"] == signal_id:
+            if item["result"] != "PENDING":
+                return False
+            item["result"] = result
+            if result == "WIN":
+                data["wins"] += 1
+            else:
+                data["losses"] += 1
+            save_data(data)
+            return True
+
+    return False
+
+
+def safe_error_text(e):
+    msg = str(e)
+
+    if "API_KEY_INVALIDA" in msg:
+        return "⚠️ TwelveData rechazó la API Key. Revisa que la key esté activa."
+    if "API_KEY_NO_CONFIGURADA" in msg:
+        return "⚠️ Falta TWELVE_API_KEY en Railway Variables."
+    if "DATOS_NO_DISPONIBLES" in msg:
+        return "⚠️ No hay datos disponibles ahora. Puede ser mercado cerrado o límite de API."
+    return "⚠️ No pude analizar el mercado ahora. Intenta otra vez en unos minutos."
+
+
 def run_analysis(pair_code, expiry, session):
     try:
-        time.sleep(10)
-
+        time.sleep(2)
         signal = analyze_pair(pair_code, expiry)
 
         clean_chat()
@@ -502,32 +512,29 @@ def run_analysis(pair_code, expiry, session):
             mid = send_message(signal_text(signal), main_menu(session))
 
         remember_message(mid)
+        return
 
     except Exception as e:
         clean_chat()
-        mid = send_message(f"⚠️ Error analizando el mercado:\n<code>{str(e)}</code>", main_menu(session))
+        mid = send_message(safe_error_text(e), main_menu(session))
         remember_message(mid)
+        return
 
 
-def update_result(signal_id, result):
-    data = load_data()
+def handle_message(message):
+    global last_update_id
 
-    for item in data["history"]:
-        if item["id"] == signal_id:
-            if item["result"] != "PENDING":
-                return False
+    text = message.get("text", "")
+    chat_id = str(message.get("chat", {}).get("id", ""))
 
-            item["result"] = result
+    if CHAT_ID and chat_id != str(CHAT_ID):
+        return
 
-            if result == "WIN":
-                data["wins"] += 1
-            else:
-                data["losses"] += 1
-
-            save_data(data)
-            return True
-
-    return False
+    if text in ["/start", "/reset"]:
+        clean_chat()
+        session = new_session()
+        mid = send_message("🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:", main_menu(session))
+        remember_message(mid)
 
 
 def handle_callback(callback):
@@ -549,12 +556,8 @@ def handle_callback(callback):
     if cmd == "reset":
         clean_chat()
         session = new_session()
-        edit_message(
-            chat_id,
-            msg_id,
-            "🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:",
-            main_menu(session)
-        )
+        mid = send_message("✅ Bot reiniciado.\n\n🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:", main_menu(session))
+        remember_message(mid)
 
     elif cmd == "menu_forex":
         edit_message(chat_id, msg_id, "📈 <b>Selecciona el par Forex mercado real:</b>", forex_menu(session))
@@ -563,77 +566,42 @@ def handle_callback(callback):
         edit_message(chat_id, msg_id, "🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:", main_menu(session))
 
     elif cmd == "pair":
-        pair = parts[1]
-        edit_message(chat_id, msg_id, f"⏱ <b>Selecciona expiración para {PAIRS[pair]['name']}:</b>", expiry_menu(pair, session))
+        pair_code = parts[1]
+        edit_message(chat_id, msg_id, f"⏱ <b>Selecciona expiración para {PAIRS[pair_code]['name']}:</b>", expiry_menu(pair_code, session))
 
     elif cmd == "expiry":
-        pair = parts[1]
-        expiry = parts[2]
-
-        data = load_data()
-        data["selected_pair"] = pair
-        data["selected_expiry"] = expiry
-        save_data(data)
-
-        clean_chat()
-
-        mid = send_message(
-            f"🔎 Analizando <b>{PAIRS[pair]['name']}</b>...\n"
-            f"⏱ Expiración seleccionada: <b>{expiry} minuto(s)</b>\n\n"
-            f"📊 Leyendo velas reales e indicadores...",
-            None
-        )
-        remember_message(mid)
-
-        threading.Thread(target=run_analysis, args=(pair, expiry, session), daemon=True).start()
+        pair_code = parts[1]
+        expiry = int(parts[2])
+        edit_message(chat_id, msg_id, f"🔎 Analizando <b>{PAIRS[pair_code]['name']}</b>...\nEspera unos segundos.")
+        threading.Thread(target=run_analysis, args=(pair_code, expiry, session), daemon=True).start()
 
     elif cmd == "stats":
         edit_message(chat_id, msg_id, stats_text(), main_menu(session))
 
-    elif cmd == "win":
+    elif cmd in ["win", "loss"]:
         signal_id = parts[1]
-        ok = update_result(signal_id, "WIN")
-        msg = "✅ Resultado guardado como WIN." if ok else "⚠️ Esta señal ya fue marcada."
-        edit_message(chat_id, msg_id, msg + "\n\n" + stats_text(), main_menu(session))
-
-    elif cmd == "loss":
-        signal_id = parts[1]
-        ok = update_result(signal_id, "LOSS")
-        msg = "❌ Resultado guardado como LOSS." if ok else "⚠️ Esta señal ya fue marcada."
-        edit_message(chat_id, msg_id, msg + "\n\n" + stats_text(), main_menu(session))
-
-
-def handle_message(message):
-    text = message.get("text", "")
-
-    if text == "/start":
-        clean_chat()
-        session = new_session()
-        mid = send_message("🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:", main_menu(session))
-        remember_message(mid)
-
-    elif text == "/reset":
-        clean_chat()
-        session = new_session()
-        mid = send_message("✅ Bot reiniciado.\n\n🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:", main_menu(session))
-        remember_message(mid)
+        result = "WIN" if cmd == "win" else "LOSS"
+        ok = update_result(signal_id, result)
+        text = "✅ Resultado guardado." if ok else "⚠️ Ese resultado ya fue registrado."
+        edit_message(chat_id, msg_id, text + "\n\n" + stats_text(), main_menu(session))
 
 
 def telegram_loop():
     global last_update_id
 
-    last_update_id = load_data().get("last_update_id")
+    data = load_data()
+    last_update_id = data.get("last_update_id")
 
     while True:
         try:
             params = {"timeout": 30}
-
             if last_update_id is not None:
                 params["offset"] = last_update_id + 1
 
             r = requests.get(f"{API}/getUpdates", params=params, timeout=35)
+            updates = r.json().get("result", [])
 
-            for u in r.json().get("result", []):
+            for u in updates:
                 last_update_id = u["update_id"]
 
                 data = load_data()
@@ -655,15 +623,16 @@ app = Flask(__name__)
 
 @app.route("/", methods=["GET"])
 def home():
-    return "El_Caballo_AI_Pro limpio activo"
+    return "El_Caballo_AI_Pro activo"
 
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    return {"ok": True, "mode": "direct telegram analysis"}, 200
+    return {"ok": True, "mode": "telegram polling"}, 200
 
 
 if __name__ == "__main__":
     print("El_Caballo_AI_Pro limpio activo")
     threading.Thread(target=telegram_loop, daemon=True).start()
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
