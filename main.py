@@ -28,7 +28,7 @@ DEFAULT_DATA = {
     "signals": 0,
     "wins": 0,
     "losses": 0,
-    "history": []
+    "history": [],
     "last_tv_signal_time": 0,
 }
 
