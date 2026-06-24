@@ -2,7 +2,7 @@ import os, time, json, uuid, threading, math
 from pathlib import Path
 from datetime import datetime, timezone
 import requests
-from flask import Flask
+from flask import Flask,request
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
@@ -85,7 +85,7 @@ def clean_chat():
 
 
 def send_message(text, keyboard=None):
-    payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
+    payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}f
     if keyboard:
         payload["reply_markup"] = keyboard
     try:
@@ -630,7 +630,32 @@ def home():
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    return {"ok": True, "mode": "telegram polling"}, 200
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+
+        pair = data.get("pair", "SIN PAR")
+        direction = data.get("direction", "SIN DIRECCIÓN")
+        expiry = data.get("expiry", "1")
+        strength = data.get("strength", "")
+
+        text = f"""🖤💛 <b>El_Caballo_AI_Pro</b>
+
+📡 Señal recibida desde <b>TradingView</b>
+
+📊 Par: <b>{pair}</b>
+📈 Dirección: <b>{direction}</b>
+⏱ Expiración: <b>{expiry} minuto(s)</b>
+🎯 Fuerza: <b>{strength}</b>
+
+✅ Señal generada por TradingView V9"""
+
+        send_message(text)
+
+        return {"ok": True, "sent": True}, 200
+
+    except Exception as e:
+        print("WEBHOOK ERROR:", e)
+        return {"ok": False, "error": str(e)}, 500
 
 
 if __name__ == "__main__":
