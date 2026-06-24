@@ -29,6 +29,7 @@ DEFAULT_DATA = {
     "wins": 0,
     "losses": 0,
     "history": []
+    "last_tv_signal_time": 0,
 }
 
 last_update_id = None
@@ -623,20 +624,34 @@ def telegram_loop():
 app = Flask(__name__)
 
 
-@app.route("/", methods=["GET"])
-def home():
-    return "El_Caballo_AI_Pro activo"
-
-
 @app.route("/webhook", methods=["POST"])
 def webhook():
     try:
         data = request.get_json(force=True, silent=True) or {}
 
-        pair = data.get("pair", "SIN PAR")
-        direction = data.get("direction", "SIN DIRECCIÓN")
+        bot_data = load_data()
+
+        now = time.time()
+        last_time = bot_data.get("last_tv_signal_time", 0)
+
+        # mínimo 3 minutos entre señales
+        if now - last_time < 180:
+            return {"ok": True, "skipped": "cooldown"}, 200
+
+        pair = data.get("pair") or data.get("ticker") or "SIN PAR"
+        direction_raw = str(data.get("direction", "")).lower()
         expiry = data.get("expiry", "1")
-        strength = data.get("strength", "")
+        strategy = data.get("strategy", "TradingView V9")
+
+        if direction_raw in ["buy", "long", "compra", "call"]:
+            direction = "🟢 COMPRA ARRIBA / CALL"
+        elif direction_raw in ["sell", "short", "venta", "put"]:
+            direction = "🔴 VENTA ABAJO / PUT"
+        else:
+            return {"ok": True, "skipped": "sin direccion"}, 200
+
+        bot_data["last_tv_signal_time"] = now
+        save_data(bot_data)
 
         text = f"""🖤💛 <b>El_Caballo_AI_Pro</b>
 
@@ -645,9 +660,8 @@ def webhook():
 📊 Par: <b>{pair}</b>
 📈 Dirección: <b>{direction}</b>
 ⏱ Expiración: <b>{expiry} minuto(s)</b>
-🎯 Fuerza: <b>{strength}</b>
 
-✅ Señal generada por TradingView V9"""
+✅ Fuente: <b>{strategy}</b>"""
 
         send_message(text)
 
