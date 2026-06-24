@@ -30,6 +30,8 @@ DEFAULT_DATA = {
     "losses": 0,
     "history": [],
     "last_tv_signal_time": 0,
+    "paused": False,
+    
 }
 
 last_update_id = None
@@ -119,6 +121,8 @@ def button(text, data):
 
 def main_menu(session):
     return {"inline_keyboard": [
+        [button("▶️ Activar señales", f"resume:{session}")],
+        [button("⏸️ Pausar señales", f"pause:{session}")],
         [button("📈 Forex mercado real", f"menu_forex:{session}")],
         [button("📊 Estadísticas", f"stats:{session}")],
         [button("🧹 Limpiar chat", f"reset:{session}")]
@@ -579,6 +583,18 @@ def handle_callback(callback):
         expiry = int(parts[2])
         edit_message(chat_id, msg_id, f"🔎 Analizando <b>{PAIRS[pair_code]['name']}</b>...\nEspera unos segundos.")
         threading.Thread(target=run_analysis, args=(pair_code, expiry, session), daemon=True).start()
+   
+    elif cmd == "pause":
+        data = load_data()
+        data["paused"] = True
+        save_data(data)
+        edit_message(chat_id, msg_id, "⏸️ Señales pausadas.", main_menu(session))
+
+    elif cmd == "resume":
+        data = load_data()
+        data["paused"] = False
+        save_data(data)
+        edit_message(chat_id, msg_id, "▶️ Señales activadas.", main_menu(session))    
 
     elif cmd == "stats":
         edit_message(chat_id, msg_id, stats_text(), main_menu(session))
@@ -630,7 +646,8 @@ def webhook():
         data = request.get_json(force=True, silent=True) or {}
 
         bot_data = load_data()
-
+        if bot_data.get("paused", False):
+            return {"ok": True, "paused": True}, 200
         now = time.time()
         last_time = bot_data.get("last_tv_signal_time", 0)
 
