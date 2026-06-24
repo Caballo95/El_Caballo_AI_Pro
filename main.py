@@ -85,7 +85,7 @@ def clean_chat():
 
 
 def send_message(text, keyboard=None):
-    payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}f
+    payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"}
     if keyboard:
         payload["reply_markup"] = keyboard
     try:
