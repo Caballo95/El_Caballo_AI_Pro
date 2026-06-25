@@ -535,6 +535,11 @@ def run_analysis(pair_code, expiry, session):
 
 def handle_message(message):
     text = message.get("text", "")
+    chat_id = str(message.get("chat", {}).get("id", ""))
+
+    if CHAT_ID and chat_id != str(CHAT_ID):
+        return
+
     if text == "/stop":
         data = load_data()
         data["paused"] = True
@@ -548,11 +553,8 @@ def handle_message(message):
         save_data(data)
         send_message("▶️ Señales reanudadas.")
         return
-    chat_id = str(message.get("chat", {}).get("id", ""))
 
-    if CHAT_ID and chat_id != str(CHAT_ID):
-        return
-
+   
     if text in ["/start", "/reset"]:  
         clean_chat()
         session = new_session()
