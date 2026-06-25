@@ -535,12 +535,25 @@ def run_analysis(pair_code, expiry, session):
 
 def handle_message(message):
     text = message.get("text", "")
+    if text == "/stop":
+        data = load_data()
+        data["paused"] = True
+        save_data(data)
+        send_message("⏸️ Señales pausadas.")
+        return
+
+    if text == "/on":
+        data = load_data()
+        data["paused"] = False
+        save_data(data)
+        send_message("▶️ Señales reanudadas.")
+        return
     chat_id = str(message.get("chat", {}).get("id", ""))
 
     if CHAT_ID and chat_id != str(CHAT_ID):
         return
 
-    if text in ["/start", "/reset"]:
+    if text in ["/start", "/reset"]:  
         clean_chat()
         session = new_session()
         mid = send_message("🖤💛 <b>El_Caballo_AI_Pro</b>\n\nSelecciona una opción:", main_menu(session))
