@@ -675,6 +675,14 @@ def webhook():
         expiry = data.get("expiry", "1")
         strategy = data.get("strategy", "TradingView V9")
 
+        score = float(data.get("score", 0) or 0)
+rsi11 = float(data.get("rsi11", 50) or 50)
+donchian = str(data.get("donchian", "")).lower()
+
+# Filtro IA del Caballo
+if score > 0 and score < 75:
+    return {"ok": True, "skipped": "score bajo"}, 200
+
         if direction_raw in ["buy", "long", "compra", "call"]:
             direction = "🟢 COMPRA ARRIBA / CALL"
         elif direction_raw in ["sell", "short", "venta", "put"]:
