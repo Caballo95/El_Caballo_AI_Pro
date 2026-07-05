@@ -676,8 +676,8 @@ def webhook():
         strategy = data.get("strategy", "TradingView V9")
 
         score = float(data.get("score", 0) or 0)
-rsi11 = float(data.get("rsi11", 50) or 50)
-donchian = str(data.get("donchian", "")).lower()
+        rsi11 = float(data.get("rsi11", 50) or 50)
+        donchian = str(data.get("donchian", "")).lower()
 
 # Filtro IA del Caballo
 if score > 0 and score < 75:
