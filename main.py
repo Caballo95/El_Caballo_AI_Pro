@@ -731,20 +731,26 @@ def webhook():
 ✅ Fuente: <b>{strategy}</b>"""
 
         send_message(text)
+
         data = load_data()
+
         if data.get("vip_enabled", False):
+
             if "CALL" in direction.upper():
                 vip_direction = "🟢⬆️ CALL"
             else:
                 vip_direction = "🔴⬇️ PUT"
 
             vip_text = f"""🐎 <b>El Caballo VIP Signals</b>
-        📊 Par: <b>{pair}</b>
 
-        {vip_direction}
+📊 Par: <b>{pair}</b>
 
-        ⏱ Expiración: <b>{expiry} minuto(s)</b>"""
-           send_vip_channel(vip_text)
+{vip_direction}
+
+⏱ Expiración: <b>{expiry} minuto(s)</b>"""
+
+            send_vip_channel(vip_text)
+
         return {"ok": True, "sent": True}, 200
 
     except Exception as e:
