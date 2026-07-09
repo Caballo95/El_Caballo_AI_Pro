@@ -19,6 +19,10 @@ PAIRS = {
     "USDCAD": {"name": "USD/CAD", "symbol": "USD/CAD"},
     "USDCHF": {"name": "USD/CHF", "symbol": "USD/CHF"},
     "NZDUSD": {"name": "NZD/USD", "symbol": "NZD/USD"},
+    "GBPJPY": {"name": "GBP/JPY", "symbol": "GBP/JPY"},
+    "EURGBP": {"name": "EUR/GBP", "symbol": "EUR/GBP"},
+    "EURJPY": {"name": "EUR/JPY", "symbol": "EUR/JPY"},
+    "EURCAD": {"name": "EUR/CAD", "symbol": "EUR/CAD"},
 }
 
 DEFAULT_DATA = {
