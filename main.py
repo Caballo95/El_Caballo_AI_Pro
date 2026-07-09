@@ -97,6 +97,19 @@ def send_message(text, keyboard=None):
     except Exception:
         return None
 
+VIP_CHANNEL_ID = os.getenv("VIP_CHANNEL_ID", "-1004483957275")
+
+def send_vip_channel(text):
+    payload = {
+        "chat_id": VIP_CHANNEL_ID,
+        "text": text,
+        "parse_mode": "HTML"
+    }
+    try:
+        r = requests.post(f"{API}/sendMessage", json=payload, timeout=15)
+        return r.json().get("result", {}).get("message_id")
+    except Exception:
+        return None
 
 def edit_message(chat_id, message_id, text, keyboard=None):
     payload = {"chat_id": chat_id, "message_id": message_id, "text": text, "parse_mode": "HTML"}
@@ -702,6 +715,7 @@ def webhook():
 ✅ Fuente: <b>{strategy}</b>"""
 
         send_message(text)
+        send_vip_channel(text)
 
         return {"ok": True, "sent": True}, 200
 
