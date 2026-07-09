@@ -141,8 +141,6 @@ def main_menu(session):
     return {"inline_keyboard": [
         [button("▶️ Activar señales", f"resume:{session}")],
         [button("⏸️ Pausar señales", f"pause:{session}")],
-        [button("📈 Forex mercado real", f"menu_forex:{session}")],
-        [button("📊 Estadísticas", f"stats:{session}")],
         [button("🟢 Activar VIP", f"vip_on:{session}")],
         [button("🔴 Desactivar VIP", f"vip_off:{session}")]
     ]}
