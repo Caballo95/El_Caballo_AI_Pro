@@ -748,9 +748,9 @@ def webhook():
 {vip_direction}
 
 ⏱ Expiración: <b>{expiry} minuto(s)</b>"""
-
+            print("ENVIANDO AL CANAL VIP")
             send_vip_channel(vip_text)
-
+            print("SE ENVIÓ AL CANAL VIP")
         return {"ok": True, "sent": True}, 200
 
     except Exception as e:
