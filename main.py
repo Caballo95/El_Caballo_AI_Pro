@@ -35,6 +35,7 @@ DEFAULT_DATA = {
     "history": [],
     "last_tv_signal_time": 0,
     "paused": False,
+    "vip_enabled": False,
     
 }
 
@@ -142,7 +143,8 @@ def main_menu(session):
         [button("⏸️ Pausar señales", f"pause:{session}")],
         [button("📈 Forex mercado real", f"menu_forex:{session}")],
         [button("📊 Estadísticas", f"stats:{session}")],
-        [button("🧹 Limpiar chat", f"reset:{session}")]
+        [button("🟢 Activar VIP", f"vip_on:{session}")],
+        [button("🔴 Desactivar VIP", f"vip_off:{session}")]
     ]}
 
 
@@ -626,7 +628,19 @@ def handle_callback(callback):
         data = load_data()
         data["paused"] = False
         save_data(data)
-        edit_message(chat_id, msg_id, "▶️ Señales activadas.", main_menu(session))    
+        edit_message(chat_id, msg_id, "▶️ Señales activadas.", main_menu(session))  
+
+    elif cmd == "vip_on":
+    data = load_data()
+    data["vip_enabled"] = True
+    save_data(data)
+    edit_message(chat_id, msg_id, "🟢 VIP activado.\nLas señales también se enviarán al canal VIP.", main_menu(session))
+
+    elif cmd == "vip_off":
+    data = load_data()
+    data["vip_enabled"] = False
+    save_data(data)
+    edit_message(chat_id, msg_id, "🔴 VIP desactivado.\nLas señales solo llegarán a tu bot privado.", main_menu(session))
 
     elif cmd == "stats":
         edit_message(chat_id, msg_id, stats_text(), main_menu(session))
@@ -719,7 +733,10 @@ def webhook():
 ✅ Fuente: <b>{strategy}</b>"""
 
         send_message(text)
-        send_vip_channel(text)
+
+data = load_data()
+if data.get("vip_enabled", False):
+    send_vip_channel(text)
 
         return {"ok": True, "sent": True}, 200
 
