@@ -631,16 +631,16 @@ def handle_callback(callback):
         edit_message(chat_id, msg_id, "▶️ Señales activadas.", main_menu(session))  
 
     elif cmd == "vip_on":
-    data = load_data()
-    data["vip_enabled"] = True
-    save_data(data)
-    edit_message(chat_id, msg_id, "🟢 VIP activado.\nLas señales también se enviarán al canal VIP.", main_menu(session))
+        data = load_data()
+        data["vip_enabled"] = True
+        save_data(data)
+        edit_message(chat_id, msg_id, "🟢 VIP activado.\nLas señales también se enviarán al canal VIP.", main_menu(session))
 
     elif cmd == "vip_off":
-    data = load_data()
-    data["vip_enabled"] = False
-    save_data(data)
-    edit_message(chat_id, msg_id, "🔴 VIP desactivado.\nLas señales solo llegarán a tu bot privado.", main_menu(session))
+        data = load_data()
+        data["vip_enabled"] = False
+        save_data(data)
+        edit_message(chat_id, msg_id, "🔴 VIP desactivado.\nLas señales solo llegarán a tu bot privado.", main_menu(session))
 
     elif cmd == "stats":
         edit_message(chat_id, msg_id, stats_text(), main_menu(session))
