@@ -734,11 +734,11 @@ def webhook():
 
         send_message(text)
 
-data = load_data()
-if data.get("vip_enabled", False):
-    send_vip_channel(text)
+       data = load_data()
+       if data.get("vip_enabled", False):
+           send_vip_channel(text)
 
-        return {"ok": True, "sent": True}, 200
+       return {"ok": True, "sent": True}, 200
 
     except Exception as e:
         print("WEBHOOK ERROR:", e)
