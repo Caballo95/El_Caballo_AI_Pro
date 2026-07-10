@@ -741,9 +741,9 @@ def webhook():
 
         send_message(text)
 
-data = load_data()
-if data.get("vip_enabled", True):
-    send_vip_channel(vip_text)
+        data = load_data()
+        if data.get("vip_enabled", True):
+            send_vip_channel(vip_text)
 
         return {"ok": True, "sent": True}, 200
 
