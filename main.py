@@ -688,6 +688,7 @@ app = Flask(__name__)
 def webhook():
     try:
         data = request.get_json(force=True, silent=True) or {}
+        print("WEBHOOK DATA:", data)
 
         bot_data = load_data()
         if bot_data.get("paused", False):
