@@ -140,9 +140,8 @@ def main_menu(session):
     return {"inline_keyboard": [
         [button("▶️ Activar señales", f"resume:{session}")],
         [button("⏸️ Pausar señales", f"pause:{session}")],
-        [button("📈 Forex mercado real", f"menu_forex:{session}")],
-        [button("📊 Estadísticas", f"stats:{session}")],
-        [button("🧹 Limpiar chat", f"reset:{session}")]
+        [button("📢 Activar canal VIP", f"vip_on:{session}")],
+        [button("🔕 Pausar canal VIP", f"vip_off:{session}")]
     ]}
 
 
@@ -628,8 +627,7 @@ def handle_callback(callback):
         save_data(data)
         edit_message(chat_id, msg_id, "▶️ Señales activadas.", main_menu(session))    
 
-    elif cmd == "stats":
-        edit_message(chat_id, msg_id, stats_text(), main_menu(session))
+    
 
     elif cmd in ["win", "loss"]:
         signal_id = parts[1]
@@ -637,7 +635,18 @@ def handle_callback(callback):
         ok = update_result(signal_id, result)
         text = "✅ Resultado guardado." if ok else "⚠️ Ese resultado ya fue registrado."
         edit_message(chat_id, msg_id, text + "\n\n" + stats_text(), main_menu(session))
+   
+    elif cmd == "vip_on":
+        data = load_data()
+        data["vip_enabled"] = True
+        save_data(data)
+        edit_message(chat_id, msg_id, "📢 Canal VIP activado.", main_menu(session))
 
+    elif cmd == "vip_off":
+        data = load_data()
+        data["vip_enabled"] = False
+        save_data(data)
+        edit_message(chat_id, msg_id, "🔕 Canal VIP pausado.", main_menu(session))
 
 def telegram_loop():
     global last_update_id
