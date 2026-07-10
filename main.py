@@ -688,7 +688,6 @@ app = Flask(__name__)
 def webhook():
     try:
         data = request.get_json(force=True, silent=True) or {}
-        print("WEBHOOK DATA:", data)
 
         bot_data = load_data()
         if bot_data.get("paused", False):
@@ -736,22 +735,7 @@ def webhook():
         data = load_data()
 
         if data.get("vip_enabled", False):
-
-            if "CALL" in direction.upper():
-                vip_direction = "🟢⬆️ CALL"
-            else:
-                vip_direction = "🔴⬇️ PUT"
-
-            vip_text = f"""🐎 <b>El Caballo VIP Signals</b>
-
-📊 Par: <b>{pair}</b>
-
-{vip_direction}
-
-⏱ Expiración: <b>{expiry} minuto(s)</b>"""
-            print("ENVIANDO AL CANAL VIP")
-            send_vip_channel(vip_text)
-            print("SE ENVIÓ AL CANAL VIP")
+            send_vip_channel(text)
         return {"ok": True, "sent": True}, 200
 
     except Exception as e:
