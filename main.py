@@ -740,7 +740,10 @@ def webhook():
 ⏱ Expiración: <b>{expiry} minuto(s)</b>"""
 
         send_message(text)
-        send_vip_channel(vip_text)
+
+data = load_data()
+if data.get("vip_enabled", True):
+    send_vip_channel(vip_text)
 
         return {"ok": True, "sent": True}, 200
 
