@@ -713,9 +713,21 @@ def webhook():
 
 🧠 Filtro IA: <b>Score aprobado</b>
 ✅ Fuente: <b>{strategy}</b>"""
+        if "CALL" in direction.upper():
+            vip_direction = "🟢 ⬆️ <b>CALL</b>"
+        else:
+            vip_direction = "🔴 ⬇️ <b>PUT</b>"
+
+        vip_text = f"""🐎 <b>El Caballo VIP Signals</b>
+
+📊 Par: <b>{pair}</b>
+
+{vip_direction}
+
+⏱ Expiración: <b>{expiry} minuto(s)</b>"""
 
         send_message(text)
-        send_vip_channel(text)
+        send_vip_channel(vip_text)
 
         return {"ok": True, "sent": True}, 200
 
