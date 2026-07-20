@@ -702,6 +702,11 @@ def webhook():
         strategy = data.get("strategy", "TradingView V9")
 
         score = float(data.get("score", 0) or 0)
+        buy_score = float(data.get("buy_score", 0) or 0)
+        sell_score = float(data.get("sell_score", 0) or 0)
+        score_diff = float(data.get("score_diff", 0) or 0)
+        rsi11 = float(data.get("rsi11", 0) or 0)
+        donchian = str(data.get("donchian", "")).lower()
 
         if score > 0 and score < 75:
             return {"ok": True, "skipped": "score bajo"}, 200
