@@ -23,6 +23,8 @@ PAIRS = {
     "EURGBP": {"name": "EUR/GBP", "symbol1": "EUR/GBP"},
     "EURJPY": {"name": "EUR/JPY", "symbol1": "EUR/JPY"},
     "GBPJPY": {"name": "GBP/JPY", "symbol1": "GBP/JPY"},
+    "EURAUD": {"name": "EUR/AUD", "symbol": "EUR/AUD"},
+    "EURCHF": {"name": "EUR/CHF", "symbol": "EUR/CHF"},
 }
 
 DEFAULT_DATA = {
