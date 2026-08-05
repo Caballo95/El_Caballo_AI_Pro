@@ -687,9 +687,11 @@ app = Flask(__name__)
 def webhook():
     try:
         data = request.get_json(force=True, silent=True) or {}
+        print("WEBHOOK DATA:", data, flush=True)
 
         bot_data = load_data()
         if bot_data.get("paused", False):
+            print("WEBHOOK PAUSED:", True, flush=True)
             return {"ok": True, "paused": True}, 200
 
         now = time.time()
@@ -710,7 +712,7 @@ def webhook():
         rsi11 = float(data.get("rsi11", 0) or 0)
         donchian = str(data.get("donchian", "")).lower()
 
-        if score > 0 and score < 75:
+        if score > 0 and score < 72:
             return {"ok": True, "skipped": "score bajo"}, 200
 
         if direction_raw in ["buy", "long", "compra", "call"]:
