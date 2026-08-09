@@ -427,6 +427,11 @@ def analyze_pair(pair_code, expiry):
     elif pattern_bias == "SELL":
         sell += pattern_score
 
+    if currency_bias > 0.03:
+        buy += 8
+    elif currency_bias < -0.03:
+        sell += 8
+
     buy = round(max(1, min(100, buy)))
     sell = round(max(1, min(100, sell)))
 
