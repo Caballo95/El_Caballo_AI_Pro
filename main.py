@@ -282,6 +282,50 @@ def detect_patterns(highs, lows, closes, atr_value):
 
     return pattern, bias, score
 
+# ==============================
+# FUERZA RELATIVA DE DIVISAS
+# ==============================
+
+def currency_strength(currency):
+    usd_pairs = {
+        "EUR": "EUR/USD",
+        "GBP": "GBP/USD",
+        "AUD": "AUD/USD",
+        "NZD": "NZD/USD",
+        "JPY": "USD/JPY",
+        "CAD": "USD/CAD",
+        "CHF": "USD/CHF",
+    }
+
+    symbol = usd_pairs.get(currency)
+
+    if not symbol:
+        return 0.0
+
+    try:
+        data = fetch_candles(symbol)
+        closes = data["close"]
+
+        if len(closes) < 15:
+            return 0.0
+
+        old_price = closes[-15]
+        new_price = closes[-1]
+
+        if old_price == 0:
+            return 0.0
+
+        change = ((new_price - old_price) / old_price) * 100
+
+        # En estos pares el USD está primero,
+        # por eso invertimos la lectura para JPY/CAD/CHF.
+        if currency in ("JPY", "CAD", "CHF"):
+            change = -change
+
+        return change
+
+    except Exception:
+        return 0.0
 
 def fetch_candles(symbol):
     if not TWELVE_API_KEY:
@@ -316,6 +360,14 @@ def analyze_pair(pair_code, expiry):
     opens, highs, lows, closes = data["open"], data["high"], data["low"], data["close"]
     dts = data["datetime"]
 
+    base_currency = pair_code[:3]
+    quote_currency = pair_code[3:]
+
+    base_strength = currency_strength(base_currency)
+    quote_strength = currency_strength(quote_currency)
+
+    currency_bias = base_strength - quote_strength
+    
     last_dt = parse_dt(dts[-1])
     candle_age = 999
     if last_dt:
