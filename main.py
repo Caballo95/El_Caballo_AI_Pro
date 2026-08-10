@@ -795,6 +795,34 @@ def webhook():
         rsi11 = float(data.get("rsi11", 0) or 0)
         donchian = str(data.get("donchian", "")).lower()
 
+        # FUERZA RELATIVA COMO EVIDENCIA DEL SCORE
+        clean_pair = pair.replace("/", "").upper()
+
+        if len(clean_pair) >= 6:
+            base_currency = clean_pair[:3]
+            quote_currency = clean_pair[3:6]
+
+            try:
+                base_strength = currency_strength(base_currency)
+                quote_strength = currency_strength(quote_currency)
+
+                currency_bias = base_strength - quote_strength
+
+                if direction_raw in ["buy", "long", "compra", "call"]:
+                    if currency_bias > 0.02:
+                        score += 5
+                    elif currency_bias < -0.02:
+                        score -= 5
+
+                elif direction_raw in ["sell", "short", "venta", "put"]:
+                    if currency_bias < -0.02:
+                        score += 5
+                    elif currency_bias > 0.02:
+                        score -= 5
+
+            except Exception as e:
+                print("CURRENCY STRENGTH ERROR:", e)
+        
         if score > 0 and score < 72:
             return {"ok": True, "skipped": "score bajo"}, 200
 
