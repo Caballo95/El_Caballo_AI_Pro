@@ -806,7 +806,7 @@ def webhook():
             return {"ok": True, "skipped": "sin direccion"}, 200
 
         # FILTRO DE FUERZA RELATIVA DE DIVISAS
-    clean_pair = pair.replace("/", "").upper()
+        clean_pair = pair.replace("/", "").upper()
 
     if len(clean_pair) >= 6:
         base_currency = clean_pair[:3]
