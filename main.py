@@ -287,42 +287,68 @@ def detect_patterns(highs, lows, closes, atr_value):
 # ==============================
 
 def currency_strength(currency):
-    usd_pairs = {
-        "EUR": "EUR/USD",
-        "GBP": "GBP/USD",
-        "AUD": "AUD/USD",
-        "NZD": "NZD/USD",
-        "JPY": "USD/JPY",
-        "CAD": "USD/CAD",
-        "CHF": "USD/CHF",
-    }
+    strength_pairs = [
+        "GBP/USD",
+        "EUR/JPY",
+        "GBP/CAD",
+        "CAD/JPY",
+        "EUR/GBP",
+        "USD/JPY",
+        "EUR/CAD",
+        "AUD/USD",
+        "EUR/USD",
+        "CAD/CHF",
+        "CHF/JPY",
+        "EUR/CHF",
+        "GBP/CHF",
+        "USD/CHF",
+        "EUR/AUD",
+        "USD/CAD",
+        "AUD/CAD",
+        "GBP/AUD",
+        "GBP/JPY",
+        "AUD/JPY",
+        "AUD/CHF",
+    ]
 
-    symbol = usd_pairs.get(currency)
-
-    if not symbol:
-        return 0.0
+    total_strength = 0.0
+    valid_pairs = 0
 
     try:
-        data = fetch_candles(symbol)
-        closes = data["close"]
+        for symbol in strength_pairs:
+            base = symbol[:3]
+            quote = symbol[4:7]
 
-        if len(closes) < 15:
+            if currency not in (base, quote):
+                continue
+
+            data = fetch_candles(symbol)
+
+            closes = data["close"]
+
+            if len(closes) < 15:
+                continue
+
+            old_price = closes[-15]
+            new_price = closes[-1]
+
+            if old_price == 0:
+                continue
+
+            change = ((new_price - old_price) / old_price) * 100
+
+            if currency == base:
+                contribution = change
+            else:
+                contribution = -change
+
+            total_strength += contribution
+            valid_pairs += 1
+
+        if valid_pairs == 0:
             return 0.0
 
-        old_price = closes[-15]
-        new_price = closes[-1]
-
-        if old_price == 0:
-            return 0.0
-
-        change = ((new_price - old_price) / old_price) * 100
-
-        # En estos pares el USD está primero,
-        # por eso invertimos la lectura para JPY/CAD/CHF.
-        if currency in ("JPY", "CAD", "CHF"):
-            change = -change
-
-        return change
+        return total_strength / valid_pairs
 
     except Exception:
         return 0.0
