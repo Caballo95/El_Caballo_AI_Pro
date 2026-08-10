@@ -805,6 +805,33 @@ def webhook():
         else:
             return {"ok": True, "skipped": "sin direccion"}, 200
 
+        # FILTRO DE FUERZA RELATIVA DE DIVISAS
+    clean_pair = pair.replace("/", "").upper()
+
+    if len(clean_pair) >= 6:
+        base_currency = clean_pair[:3]
+        quote_currency = clean_pair[3:6]
+
+        base_strength = currency_strength(base_currency)
+        quote_strength = currency_strength(quote_currency)
+
+        currency_bias = base_strength - quote_strength
+
+        # La fuerza debe confirmar la señal de TradingView
+        if direction_raw in ["buy", "long", "compra", "call"]:
+            if currency_bias <= 0:
+                return {
+                    "ok": True,
+                    "skipped": "fuerza de divisas no confirma COMPRA"
+                }, 200
+
+        elif direction_raw in ["sell", "short", "venta", "put"]:
+            if currency_bias >= 0:
+                return {
+                    "ok": True,
+                    "skipped": "fuerza de divisas no confirma VENTA"
+                }, 200
+        
         bot_data["last_tv_signal_time"] = now
         save_data(bot_data)
 
