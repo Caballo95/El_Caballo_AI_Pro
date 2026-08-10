@@ -808,7 +808,7 @@ def webhook():
         # FILTRO DE FUERZA RELATIVA DE DIVISAS
         clean_pair = pair.replace("/", "").upper()
 
-    if len(clean_pair) >= 6:
+        if len(clean_pair) >= 6:
         base_currency = clean_pair[:3]
         quote_currency = clean_pair[3:6]
 
