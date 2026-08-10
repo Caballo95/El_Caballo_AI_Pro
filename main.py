@@ -804,18 +804,6 @@ def webhook():
             direction = "🔴 VENTA ABAJO / PUT"
         else:
             return {"ok": True, "skipped": "sin direccion"}, 200
-
-        # FILTRO DE FUERZA RELATIVA DE DIVISAS
-clean_pair = pair.replace("/", "").upper()
-
-if len(clean_pair) >= 6:
-    base_currency = clean_pair[:3]
-    quote_currency = clean_pair[3:6]
-
-    base_strength = currency_strength(base_currency)
-    quote_strength = currency_strength(quote_currency)
-
-    currency_bias = base_strength - quote_strength
         
         bot_data["last_tv_signal_time"] = now
         save_data(bot_data)
