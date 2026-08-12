@@ -633,6 +633,7 @@ def handle_message(message):
 
 
 def handle_callback(callback):
+    print("CALLBACK RECIBIDO:", callback.get("data"), flush=True)
     answer_callback(callback["id"])
 
     chat_id = callback["message"]["chat"]["id"]
