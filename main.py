@@ -286,71 +286,40 @@ def detect_patterns(highs, lows, closes, atr_value):
 # FUERZA RELATIVA DE DIVISAS
 # ==============================
 
-def currency_strength(currency):
-    strength_pairs = [
-        "GBP/USD",
-        "EUR/JPY",
-        "GBP/CAD",
-        "CAD/JPY",
-        "EUR/GBP",
-        "USD/JPY",
-        "EUR/CAD",
-        "AUD/USD",
-        "EUR/USD",
-        "CAD/CHF",
-        "CHF/JPY",
-        "EUR/CHF",
-        "GBP/CHF",
-        "USD/CHF",
-        "EUR/AUD",
-        "USD/CAD",
-        "AUD/CAD",
-        "GBP/AUD",
-        "GBP/JPY",
-        "AUD/JPY",
-        "AUD/CHF",
-    ]
-
-    total_strength = 0.0
-    valid_pairs = 0
-
+def currency_strength(pair):
+    """
+    Calcula la fuerza relativa SOLO del par recibido.
+    Ejemplo: EURUSD -> EUR vs USD
+    """
     try:
-        for symbol in strength_pairs:
-            base = symbol[:3]
-            quote = symbol[4:7]
+        clean_pair = pair.replace("/", "").upper()
 
-            if currency not in (base, quote):
-                continue
-
-            data = fetch_candles(symbol)
-
-            closes = data["close"]
-
-            if len(closes) < 15:
-                continue
-
-            old_price = closes[-15]
-            new_price = closes[-1]
-
-            if old_price == 0:
-                continue
-
-            change = ((new_price - old_price) / old_price) * 100
-
-            if currency == base:
-                contribution = change
-            else:
-                contribution = -change
-
-            total_strength += contribution
-            valid_pairs += 1
-
-        if valid_pairs == 0:
+        if len(clean_pair) < 6:
             return 0.0
 
-        return total_strength / valid_pairs
+        base = clean_pair[:3]
+        quote = clean_pair[3:6]
 
-    except Exception:
+        symbol = f"{base}/{quote}"
+
+        data = fetch_candles(symbol)
+        closes = data["close"]
+
+        if len(closes) < 15:
+            return 0.0
+
+        old_price = closes[-15]
+        new_price = closes[-1]
+
+        if old_price == 0:
+            return 0.0
+
+        change = ((new_price - old_price) / old_price) * 100
+
+        return change
+
+    except Exception as e:
+        print("CURRENCY STRENGTH ERROR:", e, flush=True)
         return 0.0
 
 def fetch_candles(symbol):
@@ -803,10 +772,9 @@ def webhook():
             quote_currency = clean_pair[3:6]
 
             try:
-                base_strength = currency_strength(base_currency)
-                quote_strength = currency_strength(quote_currency)
+                pair_strength = currency_strength(pair)
 
-                currency_bias = base_strength - quote_strength
+                currency_bias = pair_strength
 
                 if direction_raw in ["buy", "long", "compra", "call"]:
                     if currency_bias > 0.02:
